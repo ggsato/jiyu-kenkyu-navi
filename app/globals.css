@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f2e8;
+  --card: #ffffff;
+  --text: #233142;
+  --muted: #5e6b78;
+  --line: #d9e2ec;
+  --accent: #ffb703;
+  --accent-strong: #fb8500;
+  --mint: #d9f0ea;
+}
+
+html {
+  background:
+    radial-gradient(circle at top left, rgba(255, 183, 3, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(33, 158, 188, 0.12), transparent 24%),
+    var(--bg);
+}
+
+body {
+  color: var(--text);
+  font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+}
+
+input,
+textarea,
+select {
+  @apply w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-200;
+}
+
+button {
+  @apply cursor-pointer transition;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-2xl bg-amber-400 px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-amber-300;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50;
+}
+
+.field-label {
+  @apply mb-2 block text-sm font-medium text-slate-700;
+}

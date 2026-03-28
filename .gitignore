@@ -19,3 +19,22 @@ venv/
 
 # Logs
 *.log
+
+# Node / Next.js
+node_modules/
+.next/
+dist/
+coverage/
+tsconfig.tsbuildinfo
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Uploads
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Runtime data
+data/

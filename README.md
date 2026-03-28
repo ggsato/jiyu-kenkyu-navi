@@ -1,48 +1,129 @@
-# 自由研究ナビ / Jiyu Kenkyu Navi
+# 自由研究ナビ MVP
 
-自由研究を、答え探しではなく、  
-**願いから問いを育て、問いから地図を描いていく営み** として支えるプロジェクトです。
+`spec_v1.1.md` を唯一の仕様ソースとして実装した、自由研究ナビの MVP です。
 
-## このリポジトリについて
+## セットアップ
 
-このリポジトリは、自由研究ナビの思想と論理設計をまとめたものです。
+1. `.env.example` をコピーして `.env.local` を作成します。
+2. PostgreSQL を Docker Compose で起動します。
+3. Prisma migration を実行します。
+4. seed を流します。
+5. 開発サーバーを起動します。
 
-- **思想**: [自由研究とは何か](./自由研究とは何か.md)
-- **論理設計**: [自由研究ナビ](./自由研究ナビ.md)
+```bash
+cp .env.example .env.local
+docker compose up -d
+pnpm install
+pnpm prisma:generate
+pnpm prisma:migrate --name init
+pnpm prisma:seed
+pnpm dev
+```
 
-## 目的
+## Docker Compose による DB 起動方法
 
-自由研究ナビは、すぐに正解を与えるためのツールではありません。  
-自分の中にある願いから出発し、小さな問いを育て、現在地を確かめながら次の一歩を見つけるための支援を目指します。
+```bash
+docker compose up -d
+docker compose ps
+```
 
-## キーワード
+PostgreSQL 16 を `localhost:5432` で起動します。
 
-- 自由研究
-- 問い
-- 願い
-- 探究
-- 地図
-- ナビゲーション
-- 学びの設計
+## `.env.example` の使い方
 
-## このプロジェクトの位置づけ
+最低限、以下を設定してください。
 
-現時点では、このリポジトリは実装そのものよりも、  
-まず **思想と言葉の骨格を整えるための設計リポジトリ** です。
+```env
+DATABASE_URL="postgresql://jiyu_user:jiyu_password@localhost:5432/jiyu_kenkyu_navi?schema=public"
+OPENAI_API_KEY=""
+OPENAI_MODEL="gpt-5.1"
+OPENAI_MODEL_QUESTION="gpt-5.1"
+OPENAI_MODEL_RECORD_FIELDS="gpt-5.1"
+OPENAI_MODEL_HOME="gpt-5.1"
+OPENAI_TIMEOUT_MS="60000"
+DEV_USER_NAME="開発ユーザー"
+UPLOAD_DIR="public/uploads"
+EVENT_LOG_PATH="/tmp/jiyu-kenkyu-navi-events.log"
+ALLOWED_DEV_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
+```
 
-今後は必要に応じて、以下のような方向へ発展できます。
+- `OPENAI_API_KEY` を空にすると、AI 機能は固定フォールバック文で動きます
+- PostgreSQL 接続情報は `.env.local` で管理してください
+- 開発時のイベントログは既定で `/tmp/jiyu-kenkyu-navi-events.log` に出ます
+- `localhost` 以外の URL で dev サーバーにアクセスするなら `ALLOWED_DEV_ORIGINS` に追加してください
+- 入力文字数は UI と API の両方で制限しています。超過時は画面と API レスポンスで分かるようにしています
 
-- 対話型プロトタイプ
-- 問い生成ロジックの実装
-- UI / UX の設計
-- 実践例・ユースケース集
-- ワークショップや教育利用への展開
+## Prisma migration 実行方法
 
-## リポジトリ名
+```bash
+pnpm prisma:generate
+pnpm prisma:migrate --name init
+```
 
-このプロジェクトの GitHub repository 名は、  
-`jiyu-kenkyu-navi` を想定しています。
+## seed 実行方法
 
-## License
+```bash
+pnpm prisma:seed
+```
 
-ライセンスは `LICENSE` を参照してください。
+家族向けのサンプル Family と、その中の開発ユーザー `dev-user-fixed`, `family-user-a`, `family-user-b` を用意します。初期 Wish / Question / Record / Reflection は `dev-user-fixed` に投入します。
+
+## 開発サーバー起動方法
+
+```bash
+pnpm dev
+```
+
+アプリ本体は Docker 化せず、ホストの Node.js で起動する前提です。
+
+## OpenAI API キー設定方法
+
+`.env.local` に `OPENAI_API_KEY` を設定してください。
+
+```env
+OPENAI_API_KEY="sk-..."
+```
+
+未設定時でも保存処理は止まらず、以下の固定文でフォールバックします。
+
+- 問い候補生成失敗時: 「いまの願いから、まずは小さく記録できる問いを考えてみよう」
+- 記録項目候補生成失敗時: 「まずは、いつ・何をしたか・どうだったか、の3つを残してみよう」
+- ホーム要約生成失敗時: 「記録が少しずつたまっています。次も同じ見方で1件残してみよう」
+
+## 画像アップロードの保存先
+
+開発中の画像は `public/uploads` に保存します。
+
+## 家族内の軽量ユーザー切り替え
+
+初版認証は未実装です。家族単位の MVP 用として `Family / FamilyMember / User` を持ち、同じ家族の中のユーザーを画面上で切り替えて使います。ユーザー選択は cookie に保持します。
+
+## 実装済み API
+
+- `POST /api/ai/question-candidates`
+- `POST /api/questions/generate`
+- `POST /api/questions`
+- `GET /api/questions/active`
+- `GET /api/home`
+- `GET /api/records`
+- `POST /api/records`
+- `PATCH /api/records/:id`
+- `DELETE /api/records/:id`
+- `POST /api/records/:id/attachments`
+- `GET /api/reflections/today`
+- `POST /api/reflections`
+- `PUT /api/reflections/:id`
+- `POST /api/ai/record-fields/suggest`
+- `POST /api/ai/home-summary`
+- `GET /api/health`
+- `POST /api/logs`
+
+## 今回未実装の範囲
+
+- 本格認証
+- 本番 AWS / S3 構成
+- challenge UI / stretch UI
+- 高度な分析画面
+- 複雑なスコアリング
+- 厳密な `next_step_accepted` のセッション起点分析
+- 本番向けの画像ストレージ抽象化

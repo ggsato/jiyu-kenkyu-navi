@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum QuestionStatus {
+  active
+  archived
+}
+
+enum PurposeFocus {
+  record
+  compare
+  relate
+  predict
+  cause
+  execute
+}
+
+enum ModeHint {
+  stretch
+  challenge
+}
+
+enum SelfProgressSignal {
+  forward
+  same
+  harder
+}
+
+enum RecordFieldType {
+  text
+  number
+  boolean
+  select
+}
+
+enum FamilyRole {
+  owner
+  member
+}
+
+model Family {
+  id        String         @id @default(cuid())
+  name      String
+  members   FamilyMember[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model User {
+  id          String         @id @default(cuid())
+  name        String?
+  wishes      Wish[]
+  memberships FamilyMember[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model FamilyMember {
+  id        String     @id @default(cuid())
+  familyId  String
+  userId    String
+  role      FamilyRole @default(member)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, userId])
+  @@index([userId, familyId])
+}
+
+model Wish {
+  id           String    @id @default(cuid())
+  userId       String
+  text         String
+  reason       String?
+  currentState String?
+  notYet       String?
+  desiredState String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@index([userId, createdAt])
+}
+
+model Question {
+  id           String         @id @default(cuid())
+  wishId        String
+  text          String
+  status        QuestionStatus @default(active)
+  purposeFocus  PurposeFocus
+  modeHint      ModeHint       @default(stretch)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  wish        Wish         @relation(fields: [wishId], references: [id], onDelete: Cascade)
+  records     Record[]
+  reflections Reflection[]
+  fieldDefinitions QuestionFieldDefinition[]
+
+  @@index([wishId, status, createdAt])
+}
+
+model Record {
+  id         String   @id @default(cuid())
+  questionId String
+  recordedAt DateTime
+  body       String
+  memo       String?
+  kvFields   Json     @default("{}")
+  tags       String[] @default([])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  question    Question           @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  attachments RecordAttachment[]
+
+  @@index([questionId, recordedAt])
+}
+
+model RecordAttachment {
+  id         String   @id @default(cuid())
+  recordId   String
+  storageKey String
+  mimeType   String
+  fileSize   Int
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  record Record @relation(fields: [recordId], references: [id], onDelete: Cascade)
+
+  @@index([recordId, sortOrder])
+}
+
+model Reflection {
+  id                 String             @id @default(cuid())
+  questionId         String
+  reflectionDate     String
+  learned            String?
+  unknown            String?
+  nextStepText       String?
+  selfProgressSignal SelfProgressSignal
+  distanceDelta      Int
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, reflectionDate])
+  @@index([questionId, reflectionDate])
+}
+
+model QuestionFieldDefinition {
+  id        String          @id @default(cuid())
+  questionId String
+  key       String
+  label     String
+  type      RecordFieldType
+  unit      String?
+  options   String[]        @default([])
+  sortOrder Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, key])
+  @@index([questionId, sortOrder])
+}
