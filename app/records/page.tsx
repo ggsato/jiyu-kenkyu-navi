@@ -54,6 +54,10 @@ export default async function RecordsPage() {
           type: field.type,
           unit: field.unit,
           options: field.options,
+          role: field.role,
+          why: field.why,
+          howToUse: field.howToUse,
+          isDefault: field.isDefault,
         }))}
       />
     </PageShell>

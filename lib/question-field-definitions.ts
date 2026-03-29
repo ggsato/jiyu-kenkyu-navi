@@ -8,6 +8,10 @@ type FieldDefinitionInput = {
   type: "text" | "number" | "boolean" | "select";
   unit?: string | null;
   options?: string[];
+  role?: "core" | "compare" | "optional";
+  why?: string | null;
+  howToUse?: string | null;
+  isDefault?: boolean;
 };
 
 type FieldContext = {
@@ -19,9 +23,39 @@ type FieldContext = {
 };
 
 const fallbackFieldDefinitions: FieldDefinitionInput[] = [
-  { key: "result", label: "どうだった", type: "select", unit: null, options: ["できた", "もう少し", "むずかしい"] },
-  { key: "target", label: "何を見た", type: "select", unit: null, options: ["相手", "場面", "動き"] },
-  { key: "noticed", label: "気づきがあった", type: "boolean", unit: null, options: [] },
+  {
+    key: "scene",
+    label: "場面",
+    type: "select",
+    unit: null,
+    options: ["はじめ", "途中", "おわり"],
+    role: "core",
+    why: "どこで違いが出るかを見るため",
+    howToUse: "同じ場面どうしで見比べるために使う",
+    isDefault: true,
+  },
+  {
+    key: "what_happened",
+    label: "何が起きた",
+    type: "text",
+    unit: null,
+    options: [],
+    role: "core",
+    why: "その回のようすを短く残すため",
+    howToUse: "あとで違いが出た回を読み返すときに使う",
+    isDefault: true,
+  },
+  {
+    key: "difference_hint",
+    label: "気になる違い",
+    type: "boolean",
+    unit: null,
+    options: [],
+    role: "compare",
+    why: "あとで見比べたい回を見つけるため",
+    howToUse: "気になる回に印を付けて、あとで集めて見る",
+    isDefault: false,
+  },
 ];
 
 function isCountLikeField(field: FieldDefinitionInput) {
@@ -43,11 +77,27 @@ function isDerivedSummaryField(field: FieldDefinitionInput) {
     text.includes("range") ||
     text.includes("all_success") ||
     text.includes("full_success") ||
+    text.includes("average") ||
+    text.includes("avg") ||
+    text.includes("sum") ||
+    text.includes("total") ||
+    text.includes("score") ||
+    text.includes("ratio") ||
+    text.includes("percent") ||
     text.includes("回数帯") ||
     text.includes("成功回数帯") ||
     text.includes("全成功") ||
     text.includes("達成") ||
-    text.includes("100%")
+    text.includes("100%") ||
+    text.includes("平均") ||
+    text.includes("合計") ||
+    text.includes("合算") ||
+    text.includes("割合") ||
+    text.includes("比率") ||
+    text.includes("率") ||
+    text.includes("スコア") ||
+    text.includes("評価") ||
+    text.includes("差")
   );
 }
 
@@ -120,7 +170,13 @@ function sanitizeFieldDefinitions(fields: FieldDefinitionInput[]) {
       continue;
     }
 
-    deduped.push(field);
+    deduped.push({
+      ...field,
+      role: field.role || "core",
+      why: field.why || null,
+      howToUse: field.howToUse || null,
+      isDefault: Boolean(field.isDefault),
+    });
   }
 
   const hasCountField = deduped.some(isCountLikeField);
@@ -137,7 +193,26 @@ function sanitizeFieldDefinitions(fields: FieldDefinitionInput[]) {
     return true;
   });
 
-  return filtered.slice(0, 3);
+  const sorted = filtered.sort((a, b) => {
+    const roleOrder = { core: 0, compare: 1, optional: 2 } as const;
+    return roleOrder[a.role || "core"] - roleOrder[b.role || "core"];
+  });
+
+  let defaultCoreCount = 0;
+
+  return sorted.slice(0, 10).map((field) => {
+    const isCore = (field.role || "core") === "core";
+    const isDefault = isCore && defaultCoreCount < 3 && (field.isDefault || defaultCoreCount < 2);
+
+    if (isDefault) {
+      defaultCoreCount += 1;
+    }
+
+    return {
+      ...field,
+      isDefault,
+    };
+  });
 }
 
 export async function buildFieldDefinitionInputs(
@@ -163,6 +238,10 @@ export async function buildFieldDefinitionInputs(
       type: field.type as FieldDefinitionInput["type"],
       unit: field.unit || null,
       options: field.options || [],
+      role: field.role as FieldDefinitionInput["role"],
+      why: field.why || null,
+      howToUse: field.how_to_use || null,
+      isDefault: field.is_default || false,
     })));
   }
 
@@ -184,6 +263,10 @@ export async function createQuestionFieldDefinitions(
           type: field.type as RecordFieldType,
           unit: field.unit || null,
           options: field.options || [],
+          role: field.role || "core",
+          why: field.why || null,
+          howToUse: field.howToUse || null,
+          isDefault: Boolean(field.isDefault),
           sortOrder: index,
         },
       }),

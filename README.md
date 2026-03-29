@@ -2,6 +2,26 @@
 
 `spec_v1.1.md` を唯一の仕様ソースとして実装した、自由研究ナビの MVP です。
 
+## ドキュメントの正本
+
+現在は、次の文書構造を正本として扱います。
+
+- 思想
+  - `docs/philosophy/what-is-jiyu-kenkyu.md`
+  - `docs/philosophy/jiyu-kenkyu-navi.md`
+- 現行仕様の正本
+  - `docs/product/mvp-design.md`
+- 採用済み判断
+  - `docs/product/adopted-decisions.md`
+- 壊してはいけないこと
+  - `docs/product/current-invariants.md`
+- AI に渡す最小コンテキスト
+  - `docs/process/ai-context.md`
+- Codex への今後の指示・運用ルール
+  - `docs/process/documentation-rules.md`
+
+個別 Issue は意思決定ログとして残しますが、現行仕様の正本の代わりにはしません。
+
 ## セットアップ
 
 1. `.env.example` をコピーして `.env.local` を作成します。
@@ -44,13 +64,15 @@ OPENAI_TIMEOUT_MS="60000"
 DEV_USER_NAME="開発ユーザー"
 UPLOAD_DIR="public/uploads"
 EVENT_LOG_PATH="/tmp/jiyu-kenkyu-navi-events.log"
-ALLOWED_DEV_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
+ALLOWED_DEV_ORIGINS="localhost,127.0.0.1"
 ```
 
 - `OPENAI_API_KEY` を空にすると、AI 機能は固定フォールバック文で動きます
 - PostgreSQL 接続情報は `.env.local` で管理してください
 - 開発時のイベントログは既定で `/tmp/jiyu-kenkyu-navi-events.log` に出ます
-- `localhost` 以外の URL で dev サーバーにアクセスするなら `ALLOWED_DEV_ORIGINS` に追加してください
+- `localhost` 以外の端末やローカル IP で dev サーバーにアクセスするなら `ALLOWED_DEV_ORIGINS` にホスト名または IP を追加してください
+- 例: `ALLOWED_DEV_ORIGINS="localhost,127.0.0.1,192.168.11.52"`
+- `http://` や `:3000` を付けた値でも動くようにしていますが、ホスト名だけで書くのを基本にしてください
 - 入力文字数は UI と API の両方で制限しています。超過時は画面と API レスポンスで分かるようにしています
 
 ## Prisma migration 実行方法
@@ -127,3 +149,12 @@ OPENAI_API_KEY="sk-..."
 - 複雑なスコアリング
 - 厳密な `next_step_accepted` のセッション起点分析
 - 本番向けの画像ストレージ抽象化
+
+## 開発時の文書運用
+
+- 重要判断が Issue で決まったら、正本文書へ反映します
+- AI に改修を依頼するときは `docs/product/current-invariants.md` を先に読みます
+- Codex に何を先に読ませるかは `docs/process/ai-context.md` に書いています
+- Codex を含む開発エージェントへの文書運用ルールは `docs/process/documentation-rules.md` に書いています
+- コーディングAIは、コード変更だけでなく、必要な文書更新まで含めて行う前提です
+- 運用ルールは `docs/process/documentation-rules.md` を参照してください

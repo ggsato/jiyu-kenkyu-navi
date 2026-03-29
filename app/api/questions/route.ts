@@ -21,13 +21,25 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedPurposeFocus = normalizePurposeFocus(input.purpose_focus);
-    const fieldDefinitionInputs = await buildFieldDefinitionInputs(input.question_text, normalizedPurposeFocus, {
-      wish_text: input.wish_text,
-      reason: input.reason,
-      current_state: input.current_state,
-      not_yet: input.not_yet,
-      desired_state: input.desired_state,
-    });
+    const fieldDefinitionInputs = input.field_definitions.length > 0
+      ? input.field_definitions.map((field) => ({
+          key: field.key,
+          label: field.label,
+          type: field.type,
+          unit: field.unit || null,
+          options: field.options || [],
+          role: field.role,
+          why: field.why || null,
+          howToUse: field.how_to_use || null,
+          isDefault: field.is_default || false,
+        }))
+      : await buildFieldDefinitionInputs(input.question_text, normalizedPurposeFocus, {
+          wish_text: input.wish_text,
+          reason: input.reason,
+          current_state: input.current_state,
+          not_yet: input.not_yet,
+          desired_state: input.desired_state,
+        });
 
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.question.updateMany({
