@@ -156,4 +156,5 @@ OPENAI_API_KEY="sk-..."
 - AI に改修を依頼するときは `docs/product/current-invariants.md` を先に読みます
 - Codex に何を先に読ませるかは `docs/process/ai-context.md` に書いています
 - Codex を含む開発エージェントへの文書運用ルールは `docs/process/documentation-rules.md` に書いています
+- コーディングAIは、コード変更だけでなく、必要な文書更新まで含めて行う前提です
 - 運用ルールは `docs/process/documentation-rules.md` を参照してください
