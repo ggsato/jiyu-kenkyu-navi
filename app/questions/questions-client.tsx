@@ -8,13 +8,33 @@ import { getPrimaryPurposeFocusOption, normalizePurposeFocus } from "@/lib/purpo
 
 type Candidate = {
   text: string;
+  shape_label: string;
   purpose_hint: string;
   why_this_question: string;
+};
+
+type FieldCandidate = {
+  key: string;
+  label: string;
+  type: "text" | "number" | "boolean" | "select";
+  unit: string | null;
+  options: string[];
+  role: "core" | "compare" | "optional";
+  why: string | null;
+  how_to_use?: string | null;
+  is_default: boolean;
+  is_custom?: boolean;
 };
 
 type QuestionCandidatesResponse = {
   candidates?: Candidate[];
   questions?: string[];
+  error?: string;
+};
+
+type RecordFieldSuggestionsResponse = {
+  suggested_fields?: FieldCandidate[];
+  fallback_message?: string;
   error?: string;
 };
 
@@ -24,12 +44,14 @@ type QuestionFormState = {
   current_state: string;
   not_yet: string;
   desired_state: string;
+  next_curiosity_text: string;
   question_text: string;
   purpose_focus: string;
 };
 
 const STORAGE_KEY_PREFIX = "jiyu-kenkyu-navi-question-form";
 const CANDIDATES_STORAGE_KEY_PREFIX = "jiyu-kenkyu-navi-question-candidates";
+const FIELD_CONFIG_STORAGE_KEY_PREFIX = "jiyu-kenkyu-navi-question-field-config";
 
 function formStorageKey(mode: "continue" | "new") {
   return `${STORAGE_KEY_PREFIX}-${mode}`;
@@ -37,6 +59,85 @@ function formStorageKey(mode: "continue" | "new") {
 
 function candidateStorageKey(mode: "continue" | "new") {
   return `${CANDIDATES_STORAGE_KEY_PREFIX}-${mode}`;
+}
+
+function fieldConfigStorageKey(mode: "continue" | "new") {
+  return `${FIELD_CONFIG_STORAGE_KEY_PREFIX}-${mode}`;
+}
+
+function roleMeta(role: FieldCandidate["role"]) {
+  if (role === "compare") {
+    return {
+      title: "違いを見る",
+      description: "あとで比べたいときに足す項目",
+    };
+  }
+
+  if (role === "optional") {
+    return {
+      title: "気になったら足す",
+      description: "問いが育ってきたら使う項目",
+    };
+  }
+
+  return {
+    title: "まず残す",
+    description: "最初の記録で持っておきたい項目",
+  };
+}
+
+function fieldTypeLabel(type: FieldCandidate["type"]) {
+  if (type === "select") {
+    return "選ぶ";
+  }
+
+  if (type === "boolean") {
+    return "はい/いいえ";
+  }
+
+  if (type === "number") {
+    return "数で入れる";
+  }
+
+  return "短く書く";
+}
+
+function getDefaultSelectedFieldKeys(fields: FieldCandidate[]) {
+  const explicitDefaults = fields.filter((field) => field.is_default).map((field) => field.key);
+
+  if (explicitDefaults.length > 0) {
+    return explicitDefaults;
+  }
+
+  return fields
+    .filter((field) => field.role === "core")
+    .slice(0, 2)
+    .map((field) => field.key);
+}
+
+function makeFieldKey(label: string, existingKeys: string[]) {
+  const normalized = label
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 24);
+
+  const base = normalized || "custom_field";
+
+  if (!existingKeys.includes(base)) {
+    return base;
+  }
+
+  let index = 2;
+  let candidate = `${base}_${index}`;
+
+  while (existingKeys.includes(candidate)) {
+    index += 1;
+    candidate = `${base}_${index}`;
+  }
+
+  return candidate;
 }
 
 export function QuestionsClient({
@@ -73,6 +174,7 @@ export function QuestionsClient({
     if (forceTemplate && initialMode === "continue") {
       window.sessionStorage.setItem(formStorageKey("continue"), JSON.stringify(continueTemplate));
       window.sessionStorage.removeItem(candidateStorageKey("continue"));
+      window.sessionStorage.removeItem(fieldConfigStorageKey("continue"));
       return continueTemplate;
     }
 
@@ -111,9 +213,57 @@ export function QuestionsClient({
       return [];
     }
   });
+  const [fieldCandidates, setFieldCandidates] = useState<FieldCandidate[]>(() => {
+    if (typeof window === "undefined") {
+      return [];
+    }
+
+    const saved = window.sessionStorage.getItem(fieldConfigStorageKey(initialMode));
+
+    if (!saved) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(saved) as { fieldCandidates?: FieldCandidate[] };
+      return parsed.fieldCandidates || [];
+    } catch {
+      window.sessionStorage.removeItem(fieldConfigStorageKey(initialMode));
+      return [];
+    }
+  });
+  const [selectedFieldKeys, setSelectedFieldKeys] = useState<string[]>(() => {
+    if (typeof window === "undefined") {
+      return [];
+    }
+
+    const saved = window.sessionStorage.getItem(fieldConfigStorageKey(initialMode));
+
+    if (!saved) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(saved) as { selectedFieldKeys?: string[] };
+      return parsed.selectedFieldKeys || [];
+    } catch {
+      window.sessionStorage.removeItem(fieldConfigStorageKey(initialMode));
+      return [];
+    }
+  });
   const [isGenerating, startGenerating] = useTransition();
+  const [isLoadingFields, startLoadingFields] = useTransition();
   const [isSaving, startSaving] = useTransition();
   const [error, setError] = useState("");
+  const [isAddingCustomField, setIsAddingCustomField] = useState(false);
+  const [customFieldForm, setCustomFieldForm] = useState({
+    label: "",
+    type: "text" as FieldCandidate["type"],
+    why: "",
+    howToUse: "",
+    optionsText: "",
+  });
+  const [customFieldError, setCustomFieldError] = useState("");
 
   useEffect(() => {
     window.sessionStorage.setItem(formStorageKey(mode), JSON.stringify(form));
@@ -122,6 +272,10 @@ export function QuestionsClient({
   useEffect(() => {
     window.sessionStorage.setItem(candidateStorageKey(mode), JSON.stringify(candidates));
   }, [candidates, mode]);
+
+  useEffect(() => {
+    window.sessionStorage.setItem(fieldConfigStorageKey(mode), JSON.stringify({ fieldCandidates, selectedFieldKeys }));
+  }, [fieldCandidates, selectedFieldKeys, mode]);
 
   function templateForMode(nextMode: "continue" | "new") {
     return nextMode === "continue" ? continueTemplate : newTemplate;
@@ -135,12 +289,28 @@ export function QuestionsClient({
     });
   }
 
+  function resetFieldSelection() {
+    setFieldCandidates([]);
+    setSelectedFieldKeys([]);
+    setIsAddingCustomField(false);
+    setCustomFieldError("");
+    setCustomFieldForm({
+      label: "",
+      type: "text",
+      why: "",
+      howToUse: "",
+      optionsText: "",
+    });
+    window.sessionStorage.removeItem(fieldConfigStorageKey(mode));
+  }
+
   function switchMode(nextMode: "continue" | "new") {
     setMode(nextMode);
     setError("");
 
     const savedForm = window.sessionStorage.getItem(formStorageKey(nextMode));
     const savedCandidates = window.sessionStorage.getItem(candidateStorageKey(nextMode));
+    const savedFieldConfig = window.sessionStorage.getItem(fieldConfigStorageKey(nextMode));
 
     if (savedForm) {
       try {
@@ -163,10 +333,26 @@ export function QuestionsClient({
     } else {
       setCandidates([]);
     }
+
+    if (savedFieldConfig) {
+      try {
+        const parsed = JSON.parse(savedFieldConfig) as { fieldCandidates?: FieldCandidate[]; selectedFieldKeys?: string[] };
+        setFieldCandidates(parsed.fieldCandidates || []);
+        setSelectedFieldKeys(parsed.selectedFieldKeys || []);
+      } catch {
+        window.sessionStorage.removeItem(fieldConfigStorageKey(nextMode));
+        setFieldCandidates([]);
+        setSelectedFieldKeys([]);
+      }
+    } else {
+      setFieldCandidates([]);
+      setSelectedFieldKeys([]);
+    }
   }
 
   function generateCandidates() {
     setError("");
+    resetFieldSelection();
 
     startGenerating(async () => {
       const response = await fetch("/api/ai/question-candidates", {
@@ -181,6 +367,7 @@ export function QuestionsClient({
         : Array.isArray(data.questions)
           ? data.questions.map((question) => ({
               text: question,
+              shape_label: "小さくする",
               purpose_hint: "compare",
               why_this_question: "まずは問いに答える材料を集めるため",
             }))
@@ -189,18 +376,110 @@ export function QuestionsClient({
       setCandidates(nextCandidates);
       window.sessionStorage.setItem(candidateStorageKey(mode), JSON.stringify(nextCandidates));
 
-      if (!form.question_text && nextCandidates[0]?.text) {
-        setForm((current) => ({
-          ...current,
-          question_text: nextCandidates[0].text,
-          purpose_focus: normalizePurposeFocus(nextCandidates[0].purpose_hint || "compare"),
-        }));
-      }
-
       if (data.error) {
         setError(data.error);
       }
     });
+  }
+
+  function loadFieldCandidates(questionText: string, purposeFocus: string) {
+    setError("");
+
+    startLoadingFields(async () => {
+      const response = await fetch("/api/ai/record-fields/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question_text: questionText,
+          purpose_focus: purposeFocus,
+          wish_text: form.wish_text,
+          reason: form.reason,
+          current_state: form.current_state,
+          not_yet: form.not_yet,
+          desired_state: form.desired_state,
+          existing_kv_keys: [],
+        }),
+      });
+
+      const data = (await response.json()) as RecordFieldSuggestionsResponse;
+      const nextFieldCandidates = Array.isArray(data.suggested_fields) ? data.suggested_fields : [];
+      setFieldCandidates(nextFieldCandidates);
+      setSelectedFieldKeys(getDefaultSelectedFieldKeys(nextFieldCandidates));
+    });
+  }
+
+  function selectCandidate(candidate: Candidate) {
+    const normalizedPurpose = normalizePurposeFocus(candidate.purpose_hint);
+    const nextForm = {
+      ...form,
+      question_text: candidate.text,
+      purpose_focus: normalizedPurpose,
+    };
+
+    setForm(nextForm);
+    window.sessionStorage.setItem(formStorageKey(mode), JSON.stringify(nextForm));
+    loadFieldCandidates(candidate.text, normalizedPurpose);
+  }
+
+  function toggleFieldSelection(key: string) {
+    setSelectedFieldKeys((current) =>
+      current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
+    );
+  }
+
+  function addCustomField() {
+    setCustomFieldError("");
+
+    const label = customFieldForm.label.trim();
+
+    if (!label) {
+      setCustomFieldError("項目名を入れてください");
+      return;
+    }
+
+    const duplicateLabel = fieldCandidates.some((field) => field.label.trim() === label);
+
+    if (duplicateLabel) {
+      setCustomFieldError("同じ名前の項目があります");
+      return;
+    }
+
+    const options = customFieldForm.type === "select"
+      ? customFieldForm.optionsText
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : [];
+
+    if (customFieldForm.type === "select" && options.length < 2) {
+      setCustomFieldError("選ぶ項目は選択肢を2つ以上入れてください");
+      return;
+    }
+
+    const key = makeFieldKey(label, fieldCandidates.map((field) => field.key));
+    const nextField: FieldCandidate = {
+      key,
+      label,
+      type: customFieldForm.type,
+      unit: null,
+      options,
+      role: "optional",
+      why: customFieldForm.why.trim() || null,
+      how_to_use: customFieldForm.howToUse.trim() || null,
+      is_default: false,
+      is_custom: true,
+    };
+
+    setFieldCandidates((current) => [...current, nextField]);
+    setSelectedFieldKeys((current) => [...current, key]);
+    setCustomFieldForm({
+      label: "",
+      type: "text",
+      why: "",
+      howToUse: "",
+      optionsText: "",
+    });
+    setIsAddingCustomField(false);
   }
 
   function saveQuestion() {
@@ -210,7 +489,10 @@ export function QuestionsClient({
       const response = await fetch("/api/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          field_definitions: fieldCandidates.filter((field) => selectedFieldKeys.includes(field.key)),
+        }),
       });
 
       const data = await response.json();
@@ -222,16 +504,25 @@ export function QuestionsClient({
 
       window.sessionStorage.removeItem(formStorageKey(mode));
       window.sessionStorage.removeItem(candidateStorageKey(mode));
+      window.sessionStorage.removeItem(fieldConfigStorageKey(mode));
       router.push("/");
       router.refresh();
     });
   }
 
+  const groupedFieldCandidates = {
+    core: fieldCandidates.filter((field) => field.role === "core"),
+    compare: fieldCandidates.filter((field) => field.role === "compare"),
+    optional: fieldCandidates.filter((field) => field.role === "optional"),
+  };
+
   return (
     <>
       <Card>
         <SectionTitle>問いを作る</SectionTitle>
-        <p className="mt-2 text-sm text-slate-600">同じ願いを育てるか、別の願いを始めるかを決めてから、小さな問いを1つ選びます。</p>
+        <p className="mt-2 text-sm text-slate-600">
+          同じ願いを育てるか、別の願いを始めるかを決めてから、問いの芽を整え、記録の仕方まで決めます。
+        </p>
       </Card>
 
       <Card className="space-y-3">
@@ -329,6 +620,12 @@ export function QuestionsClient({
             <textarea maxLength={INPUT_LIMITS.desired_state} rows={3} value={form.desired_state} onChange={(event) => updateField("desired_state", event.target.value)} />
             <p className="mt-1 text-xs text-slate-500">{limitLabel(form.desired_state.length, INPUT_LIMITS.desired_state)}</p>
           </div>
+          <div className="md:col-span-2">
+            <label className="field-label">今いちばん気になること</label>
+            <textarea maxLength={INPUT_LIMITS.next_curiosity_text} rows={3} value={form.next_curiosity_text} onChange={(event) => updateField("next_curiosity_text", event.target.value)} />
+            <p className="mt-2 text-xs text-slate-500">次に見たいことや、たしかめたいことがあれば書く</p>
+            <p className="mt-1 text-xs text-slate-500">{limitLabel(form.next_curiosity_text.length, INPUT_LIMITS.next_curiosity_text)}</p>
+          </div>
         </div>
         <button type="button" className="btn-primary w-full md:w-auto" onClick={generateCandidates} disabled={isGenerating}>
           {isGenerating ? "問いを考え中..." : "3. 問い候補を出す"}
@@ -340,7 +637,7 @@ export function QuestionsClient({
           <SectionTitle>4. 問いを1つ選ぶ</SectionTitle>
           {form.question_text ? <Pill>{getPrimaryPurposeFocusOption(form.purpose_focus).label}</Pill> : null}
         </div>
-        <p className="text-sm text-slate-600">候補ごとに「何を見る問いか」を入れてあります。目的も含めて1つ選びます。</p>
+        <p className="text-sm text-slate-600">本人の気になり方に近いものを選び、その問いで何を見るかを決めます。</p>
         <div className="space-y-3">
           {candidates.length === 0 ? (
             <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">上の内容から候補を作ります。</p>
@@ -357,14 +654,14 @@ export function QuestionsClient({
                   className={`w-full rounded-2xl border p-4 text-left ${
                     selected ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white hover:border-amber-300 hover:bg-amber-50"
                   }`}
-                  onClick={() => {
-                    updateField("question_text", candidate.text);
-                    updateField("purpose_focus", normalizedPurpose);
-                  }}
+                  onClick={() => selectCandidate(candidate)}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-medium text-slate-900">{candidate.text}</p>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">{purpose.label}</span>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">{candidate.shape_label}</span>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">{purpose.label}</span>
+                    </div>
                   </div>
                   <p className="mt-2 text-sm text-slate-600">{candidate.why_this_question}</p>
                   <p className="mt-2 text-xs text-slate-500">{purpose.description}</p>
@@ -373,11 +670,184 @@ export function QuestionsClient({
             })
           )}
         </div>
+      </Card>
+
+      <Card className="space-y-4">
+        <div className="flex items-center justify-between">
+          <SectionTitle>5. 記録項目を整える</SectionTitle>
+          {selectedFieldKeys.length > 0 ? <Pill>{selectedFieldKeys.length}項目を選択中</Pill> : null}
+        </div>
+        <p className="text-sm text-slate-600">この問いを見るために、何を残すとよいかを決めます。AI の初期選択をそのまま使ってもかまいません。</p>
+        {isLoadingFields ? (
+          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">記録項目を整えています...</p>
+        ) : fieldCandidates.length === 0 ? (
+          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">問いを選ぶと、その問いに合う記録項目候補が出ます。</p>
+        ) : (
+          <div className="space-y-4">
+            {(["core", "compare", "optional"] as const).map((role) => {
+              const items = groupedFieldCandidates[role];
+
+              if (items.length === 0) {
+                return null;
+              }
+
+              const meta = roleMeta(role);
+
+              return (
+                <section key={role} className="space-y-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{meta.title}</p>
+                    <p className="text-xs text-slate-500">{meta.description}</p>
+                  </div>
+                  <div className="space-y-3">
+                    {items.map((field) => {
+                      const selected = selectedFieldKeys.includes(field.key);
+
+                      return (
+                        <button
+                          key={field.key}
+                          type="button"
+                          className={`w-full rounded-2xl border p-4 text-left ${
+                            selected ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"
+                          }`}
+                          onClick={() => toggleFieldSelection(field.key)}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="font-medium text-slate-900">
+                                {field.label}
+                                {field.unit ? ` (${field.unit})` : ""}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">{fieldTypeLabel(field.type)}</p>
+                            </div>
+                            <div className="flex flex-wrap justify-end gap-2">
+                              {field.is_default ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">初期選択</span> : null}
+                              {field.is_custom ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">自分で追加</span> : null}
+                              <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">{selected ? "使う" : "使わない"}</span>
+                            </div>
+                          </div>
+                          <p className="mt-2 text-sm text-slate-600">{field.why || "この項目があると、あとで見比べやすくなります。"}</p>
+                          {field.how_to_use ? <p className="mt-2 text-xs text-slate-500">使い方: {field.how_to_use}</p> : null}
+                          {field.type === "select" && field.options.length > 0 ? (
+                            <p className="mt-2 text-xs text-slate-500">例: {field.options.join(" / ")}</p>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        )}
+        {fieldCandidates.length > 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-4">
+            {!isAddingCustomField ? (
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">この項目も見たい</p>
+                  <p className="text-xs text-slate-500">たとえば 対戦相手 / ステージ / 時間帯 のような項目を1件足せます。</p>
+                </div>
+                <button type="button" className="btn-secondary w-full md:w-auto" onClick={() => setIsAddingCustomField(true)}>
+                  自分で項目を足す
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">見たい項目を追加する</p>
+                    <p className="text-xs text-slate-500">その問いで見たい観点を1件だけ足します。</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-700"
+                    onClick={() => {
+                      setIsAddingCustomField(false);
+                      setCustomFieldError("");
+                    }}
+                  >
+                    閉じる
+                  </button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="field-label">項目名</label>
+                    <input
+                      type="text"
+                      value={customFieldForm.label}
+                      onChange={(event) => setCustomFieldForm((current) => ({ ...current, label: event.target.value }))}
+                      placeholder="対戦相手"
+                    />
+                  </div>
+                  <div>
+                    <label className="field-label">入力の種類</label>
+                    <select
+                      value={customFieldForm.type}
+                      onChange={(event) =>
+                        setCustomFieldForm((current) => ({
+                          ...current,
+                          type: event.target.value as FieldCandidate["type"],
+                        }))
+                      }
+                    >
+                      <option value="text">短く書く</option>
+                      <option value="select">選ぶ</option>
+                      <option value="number">数で入れる</option>
+                      <option value="boolean">はい / いいえ</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="field-label">この項目を見る理由</label>
+                    <input
+                      type="text"
+                      value={customFieldForm.why}
+                      onChange={(event) => setCustomFieldForm((current) => ({ ...current, why: event.target.value }))}
+                      placeholder="相手による違いを見るため"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="field-label">あとでどう使うか</label>
+                    <input
+                      type="text"
+                      value={customFieldForm.howToUse}
+                      onChange={(event) => setCustomFieldForm((current) => ({ ...current, howToUse: event.target.value }))}
+                      placeholder="相手ごとに違いがあるか見比べる"
+                    />
+                  </div>
+                  {customFieldForm.type === "select" ? (
+                    <div className="md:col-span-2">
+                      <label className="field-label">選択肢</label>
+                      <input
+                        type="text"
+                        value={customFieldForm.optionsText}
+                        onChange={(event) => setCustomFieldForm((current) => ({ ...current, optionsText: event.target.value }))}
+                        placeholder="友だち, CPU, 初めての相手"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">カンマ区切りで2つ以上入れます。</p>
+                    </div>
+                  ) : null}
+                </div>
+                {customFieldError ? <p className="text-sm text-red-600">{customFieldError}</p> : null}
+                <div className="flex flex-col gap-2 md:flex-row">
+                  <button type="button" className="btn-primary w-full md:w-auto" onClick={addCustomField}>
+                    この項目を追加する
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-        <button type="button" className="btn-primary w-full" onClick={saveQuestion} disabled={isSaving || !form.question_text}>
-          {isSaving ? "保存中..." : "5. この問いで始める"}
+        <button
+          type="button"
+          className="btn-primary w-full"
+          onClick={saveQuestion}
+          disabled={isSaving || !form.question_text || selectedFieldKeys.length === 0}
+        >
+          {isSaving ? "保存中..." : "6. この問いで始める"}
         </button>
       </Card>
     </>

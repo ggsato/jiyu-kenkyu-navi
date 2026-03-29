@@ -43,6 +43,7 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
         current_state: latestReflection?.learned || activeQuestion.wish.currentState || "",
         not_yet: latestReflection?.unknown || activeQuestion.wish.notYet || "",
         desired_state: latestReflection?.nextStepText || activeQuestion.wish.desiredState || "",
+        next_curiosity_text: latestReflection?.nextStepText || "",
         question_text: "",
         purpose_focus: "compare",
       }
@@ -52,6 +53,7 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
         current_state: "",
         not_yet: "",
         desired_state: "",
+        next_curiosity_text: "",
         question_text: "",
         purpose_focus: "compare",
       };
@@ -62,6 +64,7 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
     current_state: "",
     not_yet: "",
     desired_state: "",
+    next_curiosity_text: "",
     question_text: "",
     purpose_focus: "compare",
   };

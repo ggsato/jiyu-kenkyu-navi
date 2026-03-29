@@ -13,6 +13,10 @@ type FieldDefinition = {
   type: "text" | "number" | "boolean" | "select";
   unit: string | null;
   options: string[];
+  role: "core" | "compare" | "optional";
+  why: string | null;
+  howToUse: string | null;
+  isDefault: boolean;
 };
 
 type RecordItem = {
@@ -90,6 +94,10 @@ export function RecordsClient({
   }
 
   function fieldHint(field: FieldDefinition) {
+    if (field.why) {
+      return field.why;
+    }
+
     if (field.type === "select") {
       return "その回でいちばん近いものを1つ選ぶ";
     }
@@ -206,6 +214,7 @@ export function RecordsClient({
                   {field.unit ? ` (${field.unit})` : ""}
                 </label>
                 <p className="mb-2 text-xs text-slate-500">{fieldHint(field)}</p>
+                {field.howToUse ? <p className="mb-2 text-xs text-slate-400">使い方: {field.howToUse}</p> : null}
                 {field.type === "select" ? (
                   <select
                     value={String(kvFields[field.key] ?? "")}
@@ -305,7 +314,11 @@ export function RecordsClient({
                       return (
                         <div key={key} className="grid grid-cols-[8rem_1fr] gap-2">
                           <dt className="text-slate-500">{field?.label || key}</dt>
-                          <dd>{String(value)}</dd>
+                          <dd>
+                            <p>{String(value)}</p>
+                            {field?.why ? <p className="mt-1 text-xs text-slate-500">{field.why}</p> : null}
+                            {field?.howToUse ? <p className="mt-1 text-xs text-slate-400">使い方: {field.howToUse}</p> : null}
+                          </dd>
                         </div>
                       );
                     })}

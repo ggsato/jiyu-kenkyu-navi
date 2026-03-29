@@ -44,13 +44,15 @@ OPENAI_TIMEOUT_MS="60000"
 DEV_USER_NAME="開発ユーザー"
 UPLOAD_DIR="public/uploads"
 EVENT_LOG_PATH="/tmp/jiyu-kenkyu-navi-events.log"
-ALLOWED_DEV_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
+ALLOWED_DEV_ORIGINS="localhost,127.0.0.1"
 ```
 
 - `OPENAI_API_KEY` を空にすると、AI 機能は固定フォールバック文で動きます
 - PostgreSQL 接続情報は `.env.local` で管理してください
 - 開発時のイベントログは既定で `/tmp/jiyu-kenkyu-navi-events.log` に出ます
-- `localhost` 以外の URL で dev サーバーにアクセスするなら `ALLOWED_DEV_ORIGINS` に追加してください
+- `localhost` 以外の端末やローカル IP で dev サーバーにアクセスするなら `ALLOWED_DEV_ORIGINS` にホスト名または IP を追加してください
+- 例: `ALLOWED_DEV_ORIGINS="localhost,127.0.0.1,192.168.11.52"`
+- `http://` や `:3000` を付けた値でも動くようにしていますが、ホスト名だけで書くのを基本にしてください
 - 入力文字数は UI と API の両方で制限しています。超過時は画面と API レスポンスで分かるようにしています
 
 ## Prisma migration 実行方法

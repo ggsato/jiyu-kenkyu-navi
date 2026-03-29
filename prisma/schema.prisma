@@ -39,6 +39,12 @@ enum RecordFieldType {
   select
 }
 
+enum QuestionFieldRole {
+  core
+  compare
+  optional
+}
+
 enum FamilyRole {
   owner
   member
@@ -161,16 +167,20 @@ model Reflection {
 }
 
 model QuestionFieldDefinition {
-  id        String          @id @default(cuid())
+  id         String            @id @default(cuid())
   questionId String
-  key       String
-  label     String
-  type      RecordFieldType
-  unit      String?
-  options   String[]        @default([])
-  sortOrder Int             @default(0)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  key        String
+  label      String
+  type       RecordFieldType
+  unit       String?
+  options    String[]          @default([])
+  role       QuestionFieldRole @default(core)
+  why        String?
+  howToUse   String?
+  isDefault  Boolean           @default(false)
+  sortOrder  Int               @default(0)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 
   question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 

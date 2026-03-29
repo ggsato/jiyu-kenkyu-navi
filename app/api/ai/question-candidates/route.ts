@@ -23,7 +23,8 @@ export async function POST(request: NextRequest) {
         candidates: [
           {
             text: "いまの願いから、まずは小さく記録できる問いを考えてみよう",
-            purpose_hint: "record",
+            shape_label: "小さくする",
+            purpose_hint: "compare",
             why_this_question: "まずは記録できる形にするため",
           },
         ],

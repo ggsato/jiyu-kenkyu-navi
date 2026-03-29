@@ -10,11 +10,27 @@ export const questionCandidateRequestSchema = z.object({
   current_state: z.string().max(INPUT_LIMITS.current_state, `今できていることは${INPUT_LIMITS.current_state}文字までです`).optional().default(""),
   not_yet: z.string().max(INPUT_LIMITS.not_yet, `まだできていないことは${INPUT_LIMITS.not_yet}文字までです`).optional().default(""),
   desired_state: z.string().max(INPUT_LIMITS.desired_state, `できるようになりたいことは${INPUT_LIMITS.desired_state}文字までです`).optional().default(""),
+  next_curiosity_text: z.string().max(INPUT_LIMITS.next_curiosity_text, `今いちばん気になることは${INPUT_LIMITS.next_curiosity_text}文字までです`).optional().default(""),
+});
+
+export const questionFieldRoleSchema = z.enum(["core", "compare", "optional"]);
+
+export const selectedFieldDefinitionSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  type: z.enum(["text", "number", "boolean", "select"]),
+  unit: z.string().nullable().optional(),
+  options: z.array(z.string()).optional().default([]),
+  role: questionFieldRoleSchema.default("core"),
+  why: z.string().max(80).nullable().optional(),
+  how_to_use: z.string().max(80).nullable().optional(),
+  is_default: z.boolean().optional().default(false),
 });
 
 export const createQuestionSchema = questionCandidateRequestSchema.extend({
   question_text: z.string().trim().min(1, "問いを選んでください").max(INPUT_LIMITS.question_text, `問いは${INPUT_LIMITS.question_text}文字までです`),
   purpose_focus: purposeFocusSchema,
+  field_definitions: z.array(selectedFieldDefinitionSchema).optional().default([]),
 });
 
 export const createRecordSchema = z.object({
@@ -76,6 +92,10 @@ export const suggestedFieldSchema = z.object({
   type: z.enum(["text", "number", "boolean", "select"]),
   unit: z.string().nullable().optional(),
   options: z.array(z.string()).optional().default([]),
+  role: questionFieldRoleSchema.optional().default("core"),
+  why: z.string().nullable().optional(),
+  how_to_use: z.string().nullable().optional(),
+  is_default: z.boolean().optional().default(false),
 });
 
 export const uiLogSchema = z.object({
