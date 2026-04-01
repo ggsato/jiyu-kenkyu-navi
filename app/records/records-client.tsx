@@ -17,6 +17,7 @@ type FieldDefinition = {
   why: string | null;
   howToUse: string | null;
   isDefault: boolean;
+  parentLabel: string | null;
 };
 
 type RecordItem = {
@@ -205,7 +206,7 @@ export function RecordsClient({
           </p>
         </div>
         <div>
-          <label className="field-label">問いに合わせた項目</label>
+          <label className="field-label">今回注目する観測項目</label>
           <div className="space-y-3">
             {fieldDefinitions.map((field) => (
               <div key={field.id} className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -214,6 +215,7 @@ export function RecordsClient({
                   {field.unit ? ` (${field.unit})` : ""}
                 </label>
                 <p className="mb-2 text-xs text-slate-500">{fieldHint(field)}</p>
+                {field.parentLabel ? <p className="mb-2 text-xs text-amber-800">細分化元: {field.parentLabel}</p> : null}
                 {field.howToUse ? <p className="mb-2 text-xs text-slate-400">使い方: {field.howToUse}</p> : null}
                 {field.type === "select" ? (
                   <select
@@ -260,7 +262,7 @@ export function RecordsClient({
                 )}
               </div>
             ))}
-            {fieldDefinitions.length === 0 ? <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">この問いの記録項目はまだありません。</p> : null}
+            {fieldDefinitions.length === 0 ? <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">この問いで使う観測項目はまだありません。</p> : null}
           </div>
         </div>
         <div>

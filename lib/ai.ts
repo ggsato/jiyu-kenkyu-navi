@@ -5,13 +5,13 @@ import {
   RECORD_FIELD_FALLBACK,
 } from "@/lib/constants";
 import { normalizePurposeFocus } from "@/lib/purpose-focus";
-import { suggestedFieldSchema } from "@/lib/validation";
+import { suggestedExistingFieldKeySchema, suggestedFieldSchema } from "@/lib/validation";
 
 const client = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 const AI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || "60000");
-const questionModel = process.env.OPENAI_MODEL_QUESTION || process.env.OPENAI_MODEL || "gpt-5.1";
-const recordFieldsModel = process.env.OPENAI_MODEL_RECORD_FIELDS || process.env.OPENAI_MODEL || "gpt-5.1";
-const homeModel = process.env.OPENAI_MODEL_HOME || process.env.OPENAI_MODEL || "gpt-5.1";
+const questionModel = process.env.OPENAI_MODEL_QUESTION || process.env.OPENAI_MODEL || "gpt-5.4";
+const recordFieldsModel = process.env.OPENAI_MODEL_RECORD_FIELDS || process.env.OPENAI_MODEL || "gpt-5.4";
+const homeModel = process.env.OPENAI_MODEL_HOME || process.env.OPENAI_MODEL || "gpt-5.4-mini";
 
 function parseJsonText<T>(text: string): T {
   const trimmed = text.trim();
@@ -149,14 +149,31 @@ export async function generateQuestionCandidates(input: Record<string, unknown>)
 
 export async function generateRecordFieldSuggestions(input: Record<string, unknown>) {
   const normalizedPurposeFocus = normalizePurposeFocus(String(input.purpose_focus || "compare"));
+  const existingKeys = Array.isArray(input.existing_kv_keys)
+    ? (input.existing_kv_keys as unknown[]).map((key) => String(key)).filter(Boolean)
+    : [];
+  const existingFields = Array.isArray(input.existing_fields)
+    ? (input.existing_fields as Array<Record<string, unknown>>).map((field) => ({
+        key: String(field.key || ""),
+        label: String(field.label || ""),
+        role: String(field.role || ""),
+        why: String(field.why || ""),
+      })).filter((field) => field.key && field.label)
+    : [];
   const result = await createJson(
     recordFieldsModel,
     [
       "あなたは記録フォーム設計者です。",
-      "次の入力から、扱いやすい記録項目候補を最大10件作ってください。",
+      "次の入力から、既存の観測項目のどこに注目するかと、必要なら追加する項目を提案してください。",
       "特定の題材に寄せすぎず、どんな自由研究テーマでも使える考え方で作ってください。",
       "ただし question_text と wish_text に書かれていない具体物を勝手に足してはいけません。",
       "項目と選択肢は、入力された問いと願いの文脈に直接対応している必要があります。",
+      existingFields.length > 0
+        ? `この願いの既存観測項目は ${existingFields.map((field) => `${field.key}:${field.label}`).join(", ")} です。まずこの中で今回注目する項目を選び、足りないときだけ新しい項目を提案してください。`
+        : "まだ既存の観測項目はありません。長く使えそうな観測軸を優先してください。",
+      existingFields.length > 0
+        ? "必要なら、既存項目のうちどれを細かく分けるとよいかも提案してください。"
+        : "",
       "問いに答えるために本当に必要な観測値だけを出してください。",
       "あとで比べたり数えたりしやすいように、自由入力より select と boolean を優先してください。",
       "text は本当に自由記述が必要なときだけ使ってください。",
@@ -172,6 +189,8 @@ export async function generateRecordFieldSuggestions(input: Record<string, unkno
       "",
       "必ず次の JSON だけを返してください。",
       "{",
+      '  "selected_existing_keys": ["existing_key"],',
+      '  "split_existing_keys": ["existing_key"],',
       '  "suggested_fields": [',
       "    {",
       '      "key": "field_key",',
@@ -182,17 +201,23 @@ export async function generateRecordFieldSuggestions(input: Record<string, unkno
       '      "role": "core|compare|optional",',
       '      "why": "この項目を見る理由",',
       '      "how_to_use": "あとでどう使うか",',
-      '      "is_default": true',
+      '      "is_default": true,',
+      '      "derived_from_key": null',
       "    }",
       "  ]",
       "}",
       "",
       "ルール:",
       "- 最大10件",
+      "- selected_existing_keys は既存項目から 1〜6 件まで",
+      "- split_existing_keys は『細かく分けるとよい既存項目』だけを 0〜3 件まで",
+      "- split_existing_keys の各要素は selected_existing_keys に含めてよい",
       "- key は英数字と underscore を使う",
       "- label は12文字以内の短い日本語にする",
       "- 入力にない具体物や題材を勝手に作らない",
       "- 項目と選択肢は question_text と wish_text の語に沿わせる",
+      "- existing_kv_keys と重なる項目は重複して出さない",
+      "- selected_existing_keys と split_existing_keys は existing_kv_keys に含まれる key だけを使う",
       "- まず select を検討し、次に boolean を検討する",
       "- text は最後の手段にする",
       "- できるだけ後で集計しやすい軸にする",
@@ -205,6 +230,8 @@ export async function generateRecordFieldSuggestions(input: Record<string, unkno
       "- why は40文字以内で、その項目を見る理由を短く書く",
       "- how_to_use は40文字以内で、あとでどう比べたり見返したりするかを書く",
       "- is_default は core だけ true にしてよい",
+      "- 既存項目を細かく分ける意図で新規項目を出すときだけ derived_from_key に既存項目の key を入れる",
+      "- derived_from_key は existing_kv_keys に含まれる key だけにする",
       "- 良い悪い、高い低い、うまくいった、命中率のような評価項目は出さない",
       "- 勝率、成功率、平均、合計、スコア、評価、割合、差 のような集計項目は出さない",
       "- 集計したくなる場合も、1回ごとに直接記録できる元の観測値に分解する",
@@ -219,14 +246,34 @@ export async function generateRecordFieldSuggestions(input: Record<string, unkno
     ].join("\n"),
     input,
     {
+      selected_existing_keys: existingKeys.slice(0, 2),
+      split_existing_keys: [],
       suggested_fields: [
-        { key: "scene", label: "場面", type: "select", unit: null, options: ["はじめ", "途中", "おわり"], role: "core", why: "どこで違いが出るかを見るため", how_to_use: "同じ場面どうしで見比べるために使う", is_default: true },
-        { key: "what_happened", label: "何が起きた", type: "text", unit: null, options: [], role: "core", why: "その回のようすを短く残すため", how_to_use: "違いが出た回を読み返すときに使う", is_default: true },
-        { key: "difference_hint", label: "気になる違い", type: "boolean", unit: null, options: [], role: "compare", why: "あとで見比べたい回を見つけるため", how_to_use: "気になる回に印を付けてあとで集める", is_default: false },
+        { key: "scene", label: "場面", type: "select", unit: null, options: ["はじめ", "途中", "おわり"], role: "core", why: "どこで違いが出るかを見るため", how_to_use: "同じ場面どうしで見比べるために使う", is_default: true, derived_from_key: null },
+        { key: "what_happened", label: "何が起きた", type: "text", unit: null, options: [], role: "core", why: "その回のようすを短く残すため", how_to_use: "違いが出た回を読み返すときに使う", is_default: true, derived_from_key: null },
+        { key: "difference_hint", label: "気になる違い", type: "boolean", unit: null, options: [], role: "compare", why: "あとで見比べたい回を見つけるため", how_to_use: "気になる回に印を付けてあとで集める", is_default: false, derived_from_key: null },
       ],
       fallback_message: RECORD_FIELD_FALLBACK,
     },
   );
+
+  const selectedExistingKeys = Array.isArray((result as { selected_existing_keys?: unknown[] }).selected_existing_keys)
+    ? (result as { selected_existing_keys: unknown[] }).selected_existing_keys
+        .map((key) => suggestedExistingFieldKeySchema.safeParse(key))
+        .filter((key) => key.success)
+        .map((key) => key.data)
+        .filter((key) => existingKeys.includes(key))
+        .slice(0, 6)
+    : [];
+
+  const splitExistingKeys = Array.isArray((result as { split_existing_keys?: unknown[] }).split_existing_keys)
+    ? (result as { split_existing_keys: unknown[] }).split_existing_keys
+        .map((key) => suggestedExistingFieldKeySchema.safeParse(key))
+        .filter((key) => key.success)
+        .map((key) => key.data)
+        .filter((key) => existingKeys.includes(key))
+        .slice(0, 3)
+    : [];
 
   const suggestedFields = Array.isArray((result as { suggested_fields?: unknown[] }).suggested_fields)
     ? (result as { suggested_fields: unknown[] }).suggested_fields
@@ -237,17 +284,101 @@ export async function generateRecordFieldSuggestions(input: Record<string, unkno
     : [];
 
   if (suggestedFields.length > 0) {
-    return { suggested_fields: suggestedFields };
+    return {
+      selected_existing_keys: selectedExistingKeys,
+      split_existing_keys: splitExistingKeys,
+      suggested_fields: suggestedFields,
+    };
   }
 
   return {
+    selected_existing_keys: existingKeys.slice(0, 2),
+    split_existing_keys: [],
     suggested_fields: [
-      { key: "scene", label: "場面", type: "select", unit: null, options: ["はじめ", "途中", "おわり"], role: "core", why: "どこで違いが出るかを見るため", how_to_use: "同じ場面どうしで見比べるために使う", is_default: true },
-      { key: "what_happened", label: "何が起きた", type: "text", unit: null, options: [], role: "core", why: "その回のようすを短く残すため", how_to_use: "違いが出た回を読み返すときに使う", is_default: true },
-      { key: "difference_hint", label: "気になる違い", type: "boolean", unit: null, options: [], role: "compare", why: "あとで見比べたい回を見つけるため", how_to_use: "気になる回に印を付けてあとで集める", is_default: false },
+      { key: "scene", label: "場面", type: "select", unit: null, options: ["はじめ", "途中", "おわり"], role: "core", why: "どこで違いが出るかを見るため", how_to_use: "同じ場面どうしで見比べるために使う", is_default: true, derived_from_key: null },
+      { key: "what_happened", label: "何が起きた", type: "text", unit: null, options: [], role: "core", why: "その回のようすを短く残すため", how_to_use: "違いが出た回を読み返すときに使う", is_default: true, derived_from_key: null },
+      { key: "difference_hint", label: "気になる違い", type: "boolean", unit: null, options: [], role: "compare", why: "あとで見比べたい回を見つけるため", how_to_use: "気になる回に印を付けてあとで集める", is_default: false, derived_from_key: null },
     ],
     fallback_message: RECORD_FIELD_FALLBACK,
   };
+}
+
+export async function generateSplitFieldSuggestions(input: Record<string, unknown>) {
+  const existingKeys = Array.isArray(input.existing_kv_keys)
+    ? (input.existing_kv_keys as unknown[]).map((key) => String(key)).filter(Boolean)
+    : [];
+  const parentFieldKey = String(input.parent_field_key || "").trim();
+  const parentFieldLabel = String(input.parent_field_label || "").trim();
+  const parentFieldType = String(input.parent_field_type || "text").trim();
+  const result = await createJson(
+    recordFieldsModel,
+    [
+      "あなたは記録フォーム設計者です。",
+      "次の入力から、既存の観測項目を細かく見るための子項目候補を 2〜4 件提案してください。",
+      "子項目は、親項目を置き換えるのではなく、親項目の中の違いや内訳を見るためのものにしてください。",
+      "question_text と wish_text に書かれていない具体物を勝手に足してはいけません。",
+      `今回細かく分ける親項目は ${parentFieldKey}:${parentFieldLabel} (${parentFieldType}) です。`,
+      existingKeys.length > 0 ? `既存項目は ${existingKeys.join(", ")} です。重複する key は出さないでください。` : "",
+      "",
+      "必ず次の JSON だけを返してください。",
+      "{",
+      '  "split_candidates": [',
+      "    {",
+      '      "key": "field_key",',
+      '      "label": "表示名",',
+      '      "type": "text|number|boolean|select",',
+      '      "unit": null,',
+      '      "options": [],',
+      '      "role": "core|compare|optional",',
+      '      "why": "この項目を見る理由",',
+      '      "how_to_use": "あとでどう使うか",',
+      '      "is_default": false,',
+      `      "derived_from_key": "${parentFieldKey}"`,
+      "    }",
+      "  ]",
+      "}",
+      "",
+      "ルール:",
+      "- 2〜4件",
+      "- 親項目そのものと同じ意味の項目は出さない",
+      "- derived_from_key は必ず親項目の key にする",
+      "- 既存 key と重複する key は出さない",
+      "- label は12文字以内",
+      "- 観測値として直接記録できるものにする",
+      "- select を使うときは options を2件以上入れる",
+      "- JSON 以外の説明文は書かない",
+      "- Markdown のコードフェンスは使わない",
+    ].join("\n"),
+    input,
+    {
+      split_candidates: [
+        {
+          key: `${parentFieldKey}_detail`,
+          label: `${parentFieldLabel}内訳`,
+          type: "select",
+          unit: null,
+          options: ["はじめ", "途中", "おわり"],
+          role: "optional",
+          why: `${parentFieldLabel}を細かく見るため`,
+          how_to_use: "内訳ごとに違いを見る",
+          is_default: false,
+          derived_from_key: parentFieldKey,
+        },
+      ],
+    },
+  );
+
+  const splitCandidates = Array.isArray((result as { split_candidates?: unknown[] }).split_candidates)
+    ? (result as { split_candidates: unknown[] }).split_candidates
+        .map((field) => suggestedFieldSchema.safeParse(field))
+        .filter((field) => field.success)
+        .map((field) => field.data)
+        .filter((field) => field.derived_from_key === parentFieldKey)
+        .filter((field) => !existingKeys.includes(field.key))
+        .slice(0, 4)
+    : [];
+
+  return { split_candidates: splitCandidates };
 }
 
 export async function generateHomeSummary(input: Record<string, unknown>) {

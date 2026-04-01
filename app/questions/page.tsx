@@ -31,6 +31,11 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
         orderBy: { reflectionDate: "desc" },
         take: 1,
       },
+      observationFocuses: {
+        where: { isSelected: true },
+        orderBy: { sortOrder: "asc" },
+        include: { fieldDefinition: true },
+      },
     },
   });
 
@@ -38,6 +43,7 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
 
   const continueTemplate = activeQuestion
     ? {
+        wish_id: activeQuestion.wish.id,
         wish_text: activeQuestion.wish.text,
         reason: activeQuestion.wish.reason || "",
         current_state: latestReflection?.learned || activeQuestion.wish.currentState || "",
@@ -48,6 +54,7 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
         purpose_focus: "compare",
       }
     : {
+        wish_id: "",
         wish_text: "",
         reason: "",
         current_state: "",
@@ -59,6 +66,7 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
       };
 
   const newTemplate = {
+    wish_id: "",
     wish_text: "",
     reason: "",
     current_state: "",
@@ -73,11 +81,17 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
     <PageShell>
       <UserSwitcher users={users} currentUserId={currentUserId} />
       <QuestionsClient
+        key={`${activeQuestion?.wish.id || "new"}:${requestedMode}:${fromReflection ? "reflection" : "default"}`}
         continueTemplate={continueTemplate}
         newTemplate={newTemplate}
         initialMode={activeQuestion ? requestedMode : "new"}
         hasActiveWish={Boolean(activeQuestion)}
         forceTemplate={fromReflection}
+        preferredFieldKeys={
+          activeQuestion
+            ? activeQuestion.observationFocuses.map((focus) => focus.fieldDefinition.key)
+            : []
+        }
         continueSummary={
           activeQuestion
             ? {

@@ -2,7 +2,7 @@ import { Prisma, RecordFieldType } from "@prisma/client";
 import { generateRecordFieldSuggestions } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
 
-type FieldDefinitionInput = {
+export type FieldDefinitionInput = {
   key: string;
   label: string;
   type: "text" | "number" | "boolean" | "select";
@@ -12,6 +12,9 @@ type FieldDefinitionInput = {
   why?: string | null;
   howToUse?: string | null;
   isDefault?: boolean;
+  isSelected?: boolean;
+  derivedFromFieldId?: string | null;
+  derivedFromKey?: string | null;
 };
 
 type FieldContext = {
@@ -20,6 +23,17 @@ type FieldContext = {
   current_state?: string;
   not_yet?: string;
   desired_state?: string;
+};
+
+export type ExistingFieldLike = FieldDefinitionInput & {
+  id: string;
+  sortOrder: number;
+};
+
+export type ObservationFieldCandidateResult = {
+  fields: FieldDefinitionInput[];
+  selectedExistingKeys: string[];
+  splitExistingKeys: string[];
 };
 
 const fallbackFieldDefinitions: FieldDefinitionInput[] = [
@@ -158,11 +172,15 @@ function isNearDuplicate(a: FieldDefinitionInput, b: FieldDefinitionInput) {
   );
 }
 
-function sanitizeFieldDefinitions(fields: FieldDefinitionInput[]) {
+function sanitizeFieldDefinitions(fields: FieldDefinitionInput[], existingFields: FieldDefinitionInput[] = []) {
   const deduped: FieldDefinitionInput[] = [];
 
   for (const field of fields) {
     if (isSubjectiveField(field) || isEvaluativeField(field)) {
+      continue;
+    }
+
+    if (existingFields.some((existing) => isNearDuplicate(existing, field))) {
       continue;
     }
 
@@ -176,6 +194,9 @@ function sanitizeFieldDefinitions(fields: FieldDefinitionInput[]) {
       why: field.why || null,
       howToUse: field.howToUse || null,
       isDefault: Boolean(field.isDefault),
+      isSelected: field.isSelected ?? true,
+      derivedFromFieldId: field.derivedFromFieldId || null,
+      derivedFromKey: field.derivedFromKey || null,
     });
   }
 
@@ -186,11 +207,7 @@ function sanitizeFieldDefinitions(fields: FieldDefinitionInput[]) {
       return true;
     }
 
-    if (isDerivedSummaryField(field)) {
-      return false;
-    }
-
-    return true;
+    return !isDerivedSummaryField(field);
   });
 
   const sorted = filtered.sort((a, b) => {
@@ -215,11 +232,51 @@ function sanitizeFieldDefinitions(fields: FieldDefinitionInput[]) {
   });
 }
 
-export async function buildFieldDefinitionInputs(
+function toFieldInput(field: ExistingFieldLike | FieldDefinitionInput) {
+  return {
+    key: field.key,
+    label: field.label,
+    type: field.type,
+    unit: field.unit || null,
+    options: field.options || [],
+    role: field.role || "core",
+    why: field.why || null,
+    howToUse: field.howToUse || null,
+    isDefault: Boolean(field.isDefault),
+    isSelected: field.isSelected ?? true,
+    derivedFromFieldId: field.derivedFromFieldId || null,
+    derivedFromKey: field.derivedFromKey || null,
+  } satisfies FieldDefinitionInput;
+}
+
+async function listWishObservationFieldDefinitions(wishId: string): Promise<ExistingFieldLike[]> {
+  const fields = await prisma.observationFieldDefinition.findMany({
+    where: { wishId },
+    orderBy: { sortOrder: "asc" },
+  });
+
+  return fields.map((field) => ({
+    id: field.id,
+    key: field.key,
+    label: field.label,
+    type: field.type,
+    unit: field.unit,
+    options: field.options,
+    role: field.role,
+    why: field.why,
+    howToUse: field.howToUse,
+    isDefault: field.isDefault,
+    sortOrder: field.sortOrder,
+    derivedFromFieldId: field.derivedFromFieldId,
+  }));
+}
+
+export async function buildObservationFieldInputs(
   questionText: string,
   purposeFocus: string,
   context: FieldContext = {},
-): Promise<FieldDefinitionInput[]> {
+  existingFields: FieldDefinitionInput[] = [],
+): Promise<ObservationFieldCandidateResult> {
   const result = await generateRecordFieldSuggestions({
     question_text: questionText,
     purpose_focus: purposeFocus,
@@ -228,37 +285,74 @@ export async function buildFieldDefinitionInputs(
     current_state: context.current_state || "",
     not_yet: context.not_yet || "",
     desired_state: context.desired_state || "",
-    existing_kv_keys: [],
-  });
-
-  if (result.suggested_fields.length > 0) {
-    return sanitizeFieldDefinitions(result.suggested_fields.map((field) => ({
+    existing_kv_keys: existingFields.map((field) => field.key),
+    existing_fields: existingFields.map((field) => ({
       key: field.key,
       label: field.label,
-      type: field.type as FieldDefinitionInput["type"],
-      unit: field.unit || null,
-      options: field.options || [],
-      role: field.role as FieldDefinitionInput["role"],
-      why: field.why || null,
-      howToUse: field.how_to_use || null,
-      isDefault: field.is_default || false,
-    })));
+      role: field.role || "core",
+      why: field.why || "",
+    })),
+  });
+
+  const existingInputs = existingFields.map(toFieldInput);
+  const suggestedInputs = result.suggested_fields.length > 0
+    ? sanitizeFieldDefinitions(result.suggested_fields.map((field) => ({
+        key: field.key,
+        label: field.label,
+        type: field.type as FieldDefinitionInput["type"],
+        unit: field.unit || null,
+        options: field.options || [],
+        role: field.role as FieldDefinitionInput["role"],
+        why: field.why || null,
+        howToUse: field.how_to_use || null,
+        isDefault: field.is_default || false,
+        derivedFromKey: field.derived_from_key || null,
+      })), existingInputs)
+    : [];
+
+  if (existingInputs.length > 0 || suggestedInputs.length > 0) {
+    return {
+      fields: [...existingInputs, ...suggestedInputs],
+      selectedExistingKeys: result.selected_existing_keys || [],
+      splitExistingKeys: result.split_existing_keys || [],
+    };
   }
 
-  return fallbackFieldDefinitions;
+  return {
+    fields: fallbackFieldDefinitions,
+    selectedExistingKeys: [],
+    splitExistingKeys: [],
+  };
 }
 
-export async function createQuestionFieldDefinitions(
+export async function buildWishObservationFieldCandidates(
+  wishId: string | undefined,
+  questionText: string,
+  purposeFocus: string,
+  context: FieldContext = {},
+) {
+  const existingFields = wishId ? await listWishObservationFieldDefinitions(wishId) : [];
+  return buildObservationFieldInputs(questionText, purposeFocus, context, existingFields);
+}
+
+export async function upsertObservationFieldDefinitions(
   tx: Prisma.TransactionClient,
-  questionId: string,
+  wishId: string,
   fields: FieldDefinitionInput[],
 ) {
-  return Promise.all(
-    fields.map((field, index) =>
-      tx.questionFieldDefinition.create({
+  const existing = await tx.observationFieldDefinition.findMany({
+    where: { wishId },
+  });
+  const existingByKey = new Map(existing.map((field) => [field.key, field]));
+  const result = [];
+
+  for (const [index, field] of fields.entries()) {
+    const existingField = existingByKey.get(field.key);
+
+    if (existingField) {
+      const updated = await tx.observationFieldDefinition.update({
+        where: { id: existingField.id },
         data: {
-          questionId,
-          key: field.key,
           label: field.label,
           type: field.type as RecordFieldType,
           unit: field.unit || null,
@@ -268,6 +362,55 @@ export async function createQuestionFieldDefinitions(
           howToUse: field.howToUse || null,
           isDefault: Boolean(field.isDefault),
           sortOrder: index,
+          derivedFromFieldId:
+            field.derivedFromFieldId ||
+            (field.derivedFromKey ? existingByKey.get(field.derivedFromKey)?.id || null : null) ||
+            existingField.derivedFromFieldId ||
+            null,
+        },
+      });
+
+      result.push(updated);
+      continue;
+    }
+
+    const created = await tx.observationFieldDefinition.create({
+      data: {
+        wishId,
+        key: field.key,
+        label: field.label,
+        type: field.type as RecordFieldType,
+        unit: field.unit || null,
+        options: field.options || [],
+        role: field.role || "core",
+        why: field.why || null,
+        howToUse: field.howToUse || null,
+        isDefault: Boolean(field.isDefault),
+        sortOrder: index,
+        derivedFromFieldId: field.derivedFromFieldId || (field.derivedFromKey ? existingByKey.get(field.derivedFromKey)?.id || null : null),
+      },
+    });
+
+    result.push(created);
+  }
+
+  return result;
+}
+
+export async function createQuestionObservationFocuses(
+  tx: Prisma.TransactionClient,
+  questionId: string,
+  fields: Array<{ id: string; key?: string }>,
+  selectedKeys?: string[],
+) {
+  return Promise.all(
+    fields.map((field, index) =>
+      tx.questionObservationFocus.create({
+        data: {
+          questionId,
+          fieldDefinitionId: field.id,
+          isSelected: selectedKeys ? selectedKeys.includes(field.key || "") : true,
+          sortOrder: index,
         },
       }),
     ),
@@ -275,25 +418,40 @@ export async function createQuestionFieldDefinitions(
 }
 
 export async function ensureQuestionFieldDefinitions(questionId: string) {
-  const existing = await prisma.questionFieldDefinition.findMany({
-    where: { questionId },
+  const existing = await prisma.questionObservationFocus.findMany({
+    where: { questionId, isSelected: true },
     orderBy: { sortOrder: "asc" },
+    include: { fieldDefinition: { include: { derivedFromField: true } } },
   });
 
   if (existing.length > 0) {
-    return existing;
+    return existing.map((focus) => focus.fieldDefinition);
   }
 
   const question = await prisma.question.findUnique({
     where: { id: questionId },
-    include: { wish: true },
+    include: {
+      wish: {
+        include: {
+          observationFields: {
+            orderBy: { sortOrder: "asc" },
+            include: { derivedFromField: true },
+          },
+        },
+      },
+    },
   });
 
   if (!question) {
     return [];
   }
 
-  const fields = await buildFieldDefinitionInputs(question.text, question.purposeFocus, {
+  if (question.wish.observationFields.length > 0) {
+    await prisma.$transaction((tx) => createQuestionObservationFocuses(tx, question.id, question.wish.observationFields));
+    return question.wish.observationFields;
+  }
+
+  const result = await buildObservationFieldInputs(question.text, question.purposeFocus, {
     wish_text: question.wish.text,
     reason: question.wish.reason || "",
     current_state: question.wish.currentState || "",
@@ -301,5 +459,13 @@ export async function ensureQuestionFieldDefinitions(questionId: string) {
     desired_state: question.wish.desiredState || "",
   });
 
-  return prisma.$transaction((tx) => createQuestionFieldDefinitions(tx, question.id, fields));
+  return prisma.$transaction(async (tx) => {
+    const observationFields = await upsertObservationFieldDefinitions(tx, question.wishId, result.fields);
+    await createQuestionObservationFocuses(tx, question.id, observationFields);
+    return prisma.observationFieldDefinition.findMany({
+      where: { wishId: question.wishId },
+      orderBy: { sortOrder: "asc" },
+      include: { derivedFromField: true },
+    });
+  });
 }

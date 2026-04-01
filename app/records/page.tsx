@@ -15,7 +15,7 @@ export default async function RecordsPage() {
       status: "active",
       wish: { userId: currentUserId },
     },
-    include: { wish: true, fieldDefinitions: { orderBy: { sortOrder: "asc" } } },
+    include: { wish: true },
   });
 
   const records = activeQuestion
@@ -39,7 +39,7 @@ export default async function RecordsPage() {
       <UserSwitcher users={users} currentUserId={currentUserId} />
       <Card>
         <SectionTitle>記録</SectionTitle>
-        <p className="mt-2 text-sm text-slate-600">今何をしているかを残し、次に何を見るとよいかを見つけます。</p>
+        <p className="mt-2 text-sm text-slate-600">今何をしているかを残し、同じ願いの観測を積み上げながら次に何を見るとよいかを見つけます。</p>
         <p className="mt-3 text-base font-medium text-slate-900">{activeQuestion?.text || "まずは問いを作ろう"}</p>
       </Card>
       <RecordsClient
@@ -58,6 +58,7 @@ export default async function RecordsPage() {
           why: field.why,
           howToUse: field.howToUse,
           isDefault: field.isDefault,
+          parentLabel: field.derivedFromField?.label || null,
         }))}
       />
     </PageShell>

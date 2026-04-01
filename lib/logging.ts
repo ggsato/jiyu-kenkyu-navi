@@ -4,6 +4,7 @@ import path from "node:path";
 
 type EventName =
   | "wish_created"
+  | "wish_updated"
   | "question_candidates_generated"
   | "question_selected"
   | "record_created"

@@ -81,33 +81,45 @@ async function main() {
     },
   });
 
-  await prisma.questionFieldDefinition.createMany({
-    data: [
-      {
-        questionId: question.id,
+  const observationFields = await Promise.all([
+    prisma.observationFieldDefinition.create({
+      data: {
+        wishId: wish.id,
         key: "opponent_character",
         label: "相手キャラ",
         type: "select",
         options: ["Mario", "Kirby", "Pikachu", "その他"],
         sortOrder: 0,
       },
-      {
-        questionId: question.id,
+    }),
+    prisma.observationFieldDefinition.create({
+      data: {
+        wishId: wish.id,
         key: "difficult_scene",
         label: "苦しくなった場面",
         type: "select",
         options: ["崖ぎわ", "着地", "近づくとき", "守るとき"],
         sortOrder: 1,
       },
-      {
-        questionId: question.id,
+    }),
+    prisma.observationFieldDefinition.create({
+      data: {
+        wishId: wish.id,
         key: "result",
         label: "どうだった",
         type: "select",
         options: ["できた", "もう少し", "むずかしい"],
         sortOrder: 2,
       },
-    ],
+    }),
+  ]);
+
+  await prisma.questionObservationFocus.createMany({
+    data: observationFields.map((field, index) => ({
+      questionId: question.id,
+      fieldDefinitionId: field.id,
+      sortOrder: index,
+    })),
   });
 
   await prisma.record.createMany({
