@@ -25,6 +25,12 @@ type HomePayload =
       latest_reflection: Reflection | null;
       recent_records: RecordWithAttachments[];
       pending_reflection_date: string;
+      observation_summary: {
+        current: string[];
+        frequent: Array<{ label: string; count: number }>;
+        resting: string[];
+        recentAdded: string[];
+      };
       wishes: Array<{
         id: string;
         text: string;
@@ -50,6 +56,12 @@ type HomePayload =
       latest_reflection: Reflection | null;
       recent_records: RecordWithAttachments[];
       pending_reflection_date: string;
+      observation_summary: {
+        current: string[];
+        frequent: Array<{ label: string; count: number }>;
+        resting: string[];
+        recentAdded: string[];
+      };
       wishes: Array<{
         id: string;
         text: string;
@@ -93,18 +105,8 @@ export async function listWishSummaries(userId: string, activeQuestionId?: strin
     },
   });
 
-  const seenTexts = new Set<string>();
-
   return wishes
     .filter((wish) => wish.questions[0])
-    .filter((wish) => {
-      if (seenTexts.has(wish.text)) {
-        return false;
-      }
-
-      seenTexts.add(wish.text);
-      return true;
-    })
     .map((wish) => ({
       id: wish.id,
       text: wish.text,
@@ -156,6 +158,12 @@ export async function buildHomePayload(userId: string): Promise<HomePayload> {
       latest_reflection: null,
       recent_records: [],
       pending_reflection_date: new Date().toISOString().slice(0, 10),
+      observation_summary: {
+        current: [],
+        frequent: [],
+        resting: [],
+        recentAdded: [],
+      },
       wishes,
     };
   }
@@ -180,6 +188,53 @@ export async function buildHomePayload(userId: string): Promise<HomePayload> {
   }));
 
   const baseLabel = computeStateLabel(recordCount, reflectionSignals);
+  const [observationFields, focusUsage] = await Promise.all([
+    prisma.observationFieldDefinition.findMany({
+      where: { wishId: activeQuestion.wishId },
+      orderBy: { sortOrder: "asc" },
+    }),
+    prisma.questionObservationFocus.groupBy({
+      by: ["fieldDefinitionId"],
+      where: {
+        question: {
+          wishId: activeQuestion.wishId,
+        },
+        isSelected: true,
+      },
+      _count: {
+        fieldDefinitionId: true,
+      },
+    }),
+  ]);
+  const currentFocuses = await prisma.questionObservationFocus.findMany({
+    where: {
+      questionId: activeQuestion.id,
+      isSelected: true,
+    },
+    include: { fieldDefinition: true },
+    orderBy: { sortOrder: "asc" },
+  });
+  const usageById = new Map(focusUsage.map((item) => [item.fieldDefinitionId, item._count.fieldDefinitionId]));
+  const currentIds = new Set(currentFocuses.map((focus) => focus.fieldDefinitionId));
+  const observationSummary = {
+    current: currentFocuses.map((focus) => focus.fieldDefinition.label).slice(0, 5),
+    frequent: observationFields
+      .map((field) => ({
+        label: field.label,
+        count: usageById.get(field.id) || 0,
+      }))
+      .filter((field) => field.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3),
+    resting: observationFields
+      .filter((field) => !currentIds.has(field.id) && (usageById.get(field.id) || 0) > 0)
+      .map((field) => field.label)
+      .slice(0, 3),
+    recentAdded: [...observationFields]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((field) => field.label)
+      .slice(0, 3),
+  };
 
   const aiSummary = await generateHomeSummary({
     wish_text: activeQuestion.wish.text,
@@ -214,6 +269,7 @@ export async function buildHomePayload(userId: string): Promise<HomePayload> {
     latest_reflection: latestReflection,
     recent_records: activeQuestion.records,
     pending_reflection_date: new Date().toISOString().slice(0, 10),
+    observation_summary: observationSummary,
     wishes,
   };
 

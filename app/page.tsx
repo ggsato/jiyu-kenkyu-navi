@@ -23,7 +23,7 @@ export default async function HomePage({
         <Card className="bg-[linear-gradient(135deg,#fff7d6,#ffffff)]">
           <p className="mb-3 text-sm text-slate-600">今どこにいるか</p>
           <h1 className="text-3xl font-bold text-slate-900">最初の問いを作ろう</h1>
-          <p className="mt-3 max-w-2xl text-slate-700">願いを書いて、小さく記録できる問いを1つ選ぶところから始めます。</p>
+          <p className="mt-3 max-w-2xl text-slate-700">願いを書いて、何を見ていくかを決める小さな問いを1つ選ぶところから始めます。</p>
           <Link href="/questions" className="btn-primary mt-6">
             問いを作る
           </Link>
@@ -90,6 +90,59 @@ export default async function HomePage({
           <SectionTitle>最近のようす</SectionTitle>
           <p className="mt-3 text-slate-700">{home.trajectory_summary}</p>
           {home.recent_reflection_summary ? <p className="mt-3 text-sm text-slate-500">最近わかったこと: {home.recent_reflection_summary}</p> : null}
+        </Card>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <div className="flex items-center justify-between gap-3">
+            <SectionTitle>今見ている項目</SectionTitle>
+            <Link href="/observations" className="text-sm font-medium text-amber-900 underline-offset-2 hover:underline">
+              構造を見る
+            </Link>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {home.observation_summary.current.length > 0 ? (
+              home.observation_summary.current.map((label) => (
+                <span key={label} className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+                  {label}
+                </span>
+              ))
+            ) : (
+              <p className="text-sm text-slate-600">まだありません。</p>
+            )}
+          </div>
+        </Card>
+        <Card>
+          <SectionTitle>よく使う観測</SectionTitle>
+          <div className="mt-3 space-y-2">
+            {home.observation_summary.frequent.length > 0 ? (
+              home.observation_summary.frequent.map((item) => (
+                <div key={item.label} className="rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {item.label} {item.count}回
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-600">まだたまりはありません。</p>
+            )}
+          </div>
+        </Card>
+        <Card>
+          <SectionTitle>休んでいる項目</SectionTitle>
+          <div className="mt-3 space-y-2">
+            {home.observation_summary.resting.length > 0 ? (
+              home.observation_summary.resting.map((label) => (
+                <div key={label} className="rounded-2xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  {label}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-600">今は休んでいる項目はありません。</p>
+            )}
+          </div>
+          {home.observation_summary.recentAdded.length > 0 ? (
+            <p className="mt-4 text-xs text-slate-500">最近増えた項目: {home.observation_summary.recentAdded.join(" / ")}</p>
+          ) : null}
         </Card>
       </div>
 

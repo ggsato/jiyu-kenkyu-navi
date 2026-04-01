@@ -25,9 +25,12 @@ export const selectedFieldDefinitionSchema = z.object({
   why: z.string().max(80).nullable().optional(),
   how_to_use: z.string().max(80).nullable().optional(),
   is_default: z.boolean().optional().default(false),
+  is_selected: z.boolean().optional().default(true),
+  derived_from_key: z.string().optional().nullable(),
 });
 
 export const createQuestionSchema = questionCandidateRequestSchema.extend({
+  wish_id: z.string().optional(),
   question_text: z.string().trim().min(1, "問いを選んでください").max(INPUT_LIMITS.question_text, `問いは${INPUT_LIMITS.question_text}文字までです`),
   purpose_focus: purposeFocusSchema,
   field_definitions: z.array(selectedFieldDefinitionSchema).optional().default([]),
@@ -76,6 +79,7 @@ export const homeSummarySchema = z.object({
 });
 
 export const recordFieldsSuggestSchema = z.object({
+  wish_id: z.string().optional(),
   question_text: z.string().min(1),
   purpose_focus: purposeFocusSchema,
   wish_text: z.string().optional().default(""),
@@ -83,6 +87,18 @@ export const recordFieldsSuggestSchema = z.object({
   current_state: z.string().optional().default(""),
   not_yet: z.string().optional().default(""),
   desired_state: z.string().optional().default(""),
+  existing_kv_keys: z.array(z.string()).optional().default([]),
+});
+
+export const recordFieldSplitSuggestSchema = z.object({
+  wish_id: z.string().optional(),
+  question_text: z.string().min(1),
+  purpose_focus: purposeFocusSchema,
+  wish_text: z.string().optional().default(""),
+  parent_field_key: z.string().min(1),
+  parent_field_label: z.string().min(1),
+  parent_field_type: z.enum(["text", "number", "boolean", "select"]),
+  parent_field_why: z.string().optional().default(""),
   existing_kv_keys: z.array(z.string()).optional().default([]),
 });
 
@@ -96,7 +112,10 @@ export const suggestedFieldSchema = z.object({
   why: z.string().nullable().optional(),
   how_to_use: z.string().nullable().optional(),
   is_default: z.boolean().optional().default(false),
+  derived_from_key: z.string().nullable().optional(),
 });
+
+export const suggestedExistingFieldKeySchema = z.string().min(1);
 
 export const uiLogSchema = z.object({
   event: z.enum(["next_step_shown", "next_step_clicked"]),

@@ -23,6 +23,7 @@ type FieldCandidate = {
   why: string | null;
   how_to_use?: string | null;
   is_default: boolean;
+  derived_from_key?: string | null;
   is_custom?: boolean;
 };
 
@@ -34,11 +35,19 @@ type QuestionCandidatesResponse = {
 
 type RecordFieldSuggestionsResponse = {
   suggested_fields?: FieldCandidate[];
+  selected_existing_keys?: string[];
+  split_existing_keys?: string[];
   fallback_message?: string;
   error?: string;
 };
 
+type SplitFieldSuggestionsResponse = {
+  split_candidates?: FieldCandidate[];
+  error?: string;
+};
+
 type QuestionFormState = {
+  wish_id: string;
   wish_text: string;
   reason: string;
   current_state: string;
@@ -63,6 +72,10 @@ function candidateStorageKey(mode: "continue" | "new") {
 
 function fieldConfigStorageKey(mode: "continue" | "new") {
   return `${FIELD_CONFIG_STORAGE_KEY_PREFIX}-${mode}`;
+}
+
+function isSameContinueWish(savedForm: QuestionFormState, continueTemplate: QuestionFormState) {
+  return Boolean(savedForm.wish_id) && savedForm.wish_id === continueTemplate.wish_id;
 }
 
 function roleMeta(role: FieldCandidate["role"]) {
@@ -102,7 +115,13 @@ function fieldTypeLabel(type: FieldCandidate["type"]) {
   return "短く書く";
 }
 
-function getDefaultSelectedFieldKeys(fields: FieldCandidate[]) {
+function getDefaultSelectedFieldKeys(fields: FieldCandidate[], preferredKeys: string[] = []) {
+  const preferred = preferredKeys.filter((key) => fields.some((field) => field.key === key));
+
+  if (preferred.length > 0) {
+    return preferred;
+  }
+
   const explicitDefaults = fields.filter((field) => field.is_default).map((field) => field.key);
 
   if (explicitDefaults.length > 0) {
@@ -146,6 +165,7 @@ export function QuestionsClient({
   initialMode,
   hasActiveWish,
   forceTemplate,
+  preferredFieldKeys,
   continueSummary,
 }: {
   continueTemplate: QuestionFormState;
@@ -153,6 +173,7 @@ export function QuestionsClient({
   initialMode: "continue" | "new";
   hasActiveWish: boolean;
   forceTemplate: boolean;
+  preferredFieldKeys: string[];
   continueSummary: {
     wish_text: string;
     reason: string;
@@ -185,7 +206,16 @@ export function QuestionsClient({
     }
 
     try {
-      return JSON.parse(saved) as QuestionFormState;
+      const parsed = JSON.parse(saved) as QuestionFormState;
+
+      if (initialMode === "continue" && !isSameContinueWish(parsed, continueTemplate)) {
+        window.sessionStorage.removeItem(formStorageKey("continue"));
+        window.sessionStorage.removeItem(candidateStorageKey("continue"));
+        window.sessionStorage.removeItem(fieldConfigStorageKey("continue"));
+        return continueTemplate;
+      }
+
+      return parsed;
     } catch {
       window.sessionStorage.removeItem(formStorageKey(initialMode));
       return initialMode === "continue" ? continueTemplate : newTemplate;
@@ -251,6 +281,45 @@ export function QuestionsClient({
       return [];
     }
   });
+  const [splitSuggestedKeys, setSplitSuggestedKeys] = useState<string[]>(() => {
+    if (typeof window === "undefined") {
+      return [];
+    }
+
+    const saved = window.sessionStorage.getItem(fieldConfigStorageKey(initialMode));
+
+    if (!saved) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(saved) as { splitSuggestedKeys?: string[] };
+      return parsed.splitSuggestedKeys || [];
+    } catch {
+      window.sessionStorage.removeItem(fieldConfigStorageKey(initialMode));
+      return [];
+    }
+  });
+  const [splitCandidatesByParent, setSplitCandidatesByParent] = useState<Record<string, FieldCandidate[]>>(() => {
+    if (typeof window === "undefined") {
+      return {};
+    }
+
+    const saved = window.sessionStorage.getItem(fieldConfigStorageKey(initialMode));
+
+    if (!saved) {
+      return {};
+    }
+
+    try {
+      const parsed = JSON.parse(saved) as { splitCandidatesByParent?: Record<string, FieldCandidate[]> };
+      return parsed.splitCandidatesByParent || {};
+    } catch {
+      window.sessionStorage.removeItem(fieldConfigStorageKey(initialMode));
+      return {};
+    }
+  });
+  const [loadingSplitParentKey, setLoadingSplitParentKey] = useState("");
   const [isGenerating, startGenerating] = useTransition();
   const [isLoadingFields, startLoadingFields] = useTransition();
   const [isSaving, startSaving] = useTransition();
@@ -262,6 +331,7 @@ export function QuestionsClient({
     why: "",
     howToUse: "",
     optionsText: "",
+    derivedFromKey: "",
   });
   const [customFieldError, setCustomFieldError] = useState("");
 
@@ -274,8 +344,8 @@ export function QuestionsClient({
   }, [candidates, mode]);
 
   useEffect(() => {
-    window.sessionStorage.setItem(fieldConfigStorageKey(mode), JSON.stringify({ fieldCandidates, selectedFieldKeys }));
-  }, [fieldCandidates, selectedFieldKeys, mode]);
+    window.sessionStorage.setItem(fieldConfigStorageKey(mode), JSON.stringify({ fieldCandidates, selectedFieldKeys, splitSuggestedKeys, splitCandidatesByParent }));
+  }, [fieldCandidates, selectedFieldKeys, splitSuggestedKeys, splitCandidatesByParent, mode]);
 
   function templateForMode(nextMode: "continue" | "new") {
     return nextMode === "continue" ? continueTemplate : newTemplate;
@@ -292,6 +362,9 @@ export function QuestionsClient({
   function resetFieldSelection() {
     setFieldCandidates([]);
     setSelectedFieldKeys([]);
+    setSplitSuggestedKeys([]);
+    setSplitCandidatesByParent({});
+    setLoadingSplitParentKey("");
     setIsAddingCustomField(false);
     setCustomFieldError("");
     setCustomFieldForm({
@@ -300,6 +373,7 @@ export function QuestionsClient({
       why: "",
       howToUse: "",
       optionsText: "",
+      derivedFromKey: "",
     });
     window.sessionStorage.removeItem(fieldConfigStorageKey(mode));
   }
@@ -314,7 +388,16 @@ export function QuestionsClient({
 
     if (savedForm) {
       try {
-        setForm(JSON.parse(savedForm) as QuestionFormState);
+        const parsed = JSON.parse(savedForm) as QuestionFormState;
+
+        if (nextMode === "continue" && !isSameContinueWish(parsed, continueTemplate)) {
+          window.sessionStorage.removeItem(formStorageKey("continue"));
+          window.sessionStorage.removeItem(candidateStorageKey("continue"));
+          window.sessionStorage.removeItem(fieldConfigStorageKey("continue"));
+          setForm(continueTemplate);
+        } else {
+          setForm(parsed);
+        }
       } catch {
         window.sessionStorage.removeItem(formStorageKey(nextMode));
         setForm(templateForMode(nextMode));
@@ -336,17 +419,28 @@ export function QuestionsClient({
 
     if (savedFieldConfig) {
       try {
-        const parsed = JSON.parse(savedFieldConfig) as { fieldCandidates?: FieldCandidate[]; selectedFieldKeys?: string[] };
+        const parsed = JSON.parse(savedFieldConfig) as {
+          fieldCandidates?: FieldCandidate[];
+          selectedFieldKeys?: string[];
+          splitSuggestedKeys?: string[];
+          splitCandidatesByParent?: Record<string, FieldCandidate[]>;
+        };
         setFieldCandidates(parsed.fieldCandidates || []);
         setSelectedFieldKeys(parsed.selectedFieldKeys || []);
+        setSplitSuggestedKeys(parsed.splitSuggestedKeys || []);
+        setSplitCandidatesByParent(parsed.splitCandidatesByParent || {});
       } catch {
         window.sessionStorage.removeItem(fieldConfigStorageKey(nextMode));
         setFieldCandidates([]);
         setSelectedFieldKeys([]);
+        setSplitSuggestedKeys([]);
+        setSplitCandidatesByParent({});
       }
     } else {
       setFieldCandidates([]);
       setSelectedFieldKeys([]);
+      setSplitSuggestedKeys([]);
+      setSplitCandidatesByParent({});
     }
   }
 
@@ -390,6 +484,7 @@ export function QuestionsClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          wish_id: form.wish_id || undefined,
           question_text: questionText,
           purpose_focus: purposeFocus,
           wish_text: form.wish_text,
@@ -403,8 +498,19 @@ export function QuestionsClient({
 
       const data = (await response.json()) as RecordFieldSuggestionsResponse;
       const nextFieldCandidates = Array.isArray(data.suggested_fields) ? data.suggested_fields : [];
+      const aiPreferredKeys = Array.isArray(data.selected_existing_keys) ? data.selected_existing_keys : [];
+      const nextSplitSuggestedKeys = Array.isArray(data.split_existing_keys) ? data.split_existing_keys : [];
+      const mergedPreferredKeys = mode === "continue"
+        ? Array.from(new Set([...preferredFieldKeys, ...aiPreferredKeys]))
+        : aiPreferredKeys;
       setFieldCandidates(nextFieldCandidates);
-      setSelectedFieldKeys(getDefaultSelectedFieldKeys(nextFieldCandidates));
+      setSplitSuggestedKeys(nextSplitSuggestedKeys);
+      setSelectedFieldKeys(
+        getDefaultSelectedFieldKeys(
+          nextFieldCandidates,
+          mergedPreferredKeys,
+        ),
+      );
     });
   }
 
@@ -467,8 +573,13 @@ export function QuestionsClient({
       why: customFieldForm.why.trim() || null,
       how_to_use: customFieldForm.howToUse.trim() || null,
       is_default: false,
+      derived_from_key: null,
       is_custom: true,
     };
+
+    if (customFieldForm.derivedFromKey) {
+      nextField.derived_from_key = customFieldForm.derivedFromKey;
+    }
 
     setFieldCandidates((current) => [...current, nextField]);
     setSelectedFieldKeys((current) => [...current, key]);
@@ -478,8 +589,76 @@ export function QuestionsClient({
       why: "",
       howToUse: "",
       optionsText: "",
+      derivedFromKey: "",
     });
     setIsAddingCustomField(false);
+  }
+
+  function startSplitField(field: FieldCandidate) {
+    setCustomFieldError("");
+    const existingSuggestion = splitCandidatesByParent[field.key];
+
+    if (existingSuggestion && existingSuggestion.length > 0) {
+      return;
+    }
+
+    setLoadingSplitParentKey(field.key);
+
+    void fetch("/api/ai/record-fields/split-suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        wish_id: form.wish_id || undefined,
+        question_text: form.question_text,
+        purpose_focus: form.purpose_focus,
+        wish_text: form.wish_text,
+        parent_field_key: field.key,
+        parent_field_label: field.label,
+        parent_field_type: field.type,
+        parent_field_why: field.why || "",
+        existing_kv_keys: fieldCandidates.map((candidate) => candidate.key),
+      }),
+    })
+      .then(async (response) => {
+        const data = (await response.json()) as SplitFieldSuggestionsResponse;
+        const nextCandidates = Array.isArray(data.split_candidates) ? data.split_candidates : [];
+        setSplitCandidatesByParent((current) => ({
+          ...current,
+          [field.key]: nextCandidates,
+        }));
+      })
+      .catch(() => {
+        setSplitCandidatesByParent((current) => ({
+          ...current,
+          [field.key]: [],
+        }));
+      })
+      .finally(() => {
+        setLoadingSplitParentKey((current) => (current === field.key ? "" : current));
+      });
+  }
+
+  function applySplitCandidate(parentField: FieldCandidate, candidate: FieldCandidate) {
+    const key = makeFieldKey(candidate.label, fieldCandidates.map((field) => field.key));
+    const nextField: FieldCandidate = {
+      ...candidate,
+      key,
+      unit: candidate.unit || null,
+      options: candidate.options || [],
+      role: candidate.role || "optional",
+      why: candidate.why || null,
+      how_to_use: candidate.how_to_use || null,
+      is_default: false,
+      derived_from_key: parentField.key,
+      is_custom: true,
+    };
+
+    setFieldCandidates((current) => [...current, nextField]);
+    setSelectedFieldKeys((current) => Array.from(new Set([...current, key])));
+    setSplitCandidatesByParent((current) => ({
+      ...current,
+      [parentField.key]: (current[parentField.key] || []).filter((item) => item.label !== candidate.label),
+    }));
   }
 
   function saveQuestion() {
@@ -491,7 +670,11 @@ export function QuestionsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          field_definitions: fieldCandidates.filter((field) => selectedFieldKeys.includes(field.key)),
+          wish_id: mode === "continue" ? form.wish_id || undefined : undefined,
+          field_definitions: fieldCandidates.map((field) => ({
+            ...field,
+            is_selected: selectedFieldKeys.includes(field.key),
+          })),
         }),
       });
 
@@ -515,13 +698,93 @@ export function QuestionsClient({
     compare: fieldCandidates.filter((field) => field.role === "compare"),
     optional: fieldCandidates.filter((field) => field.role === "optional"),
   };
+  const selectedFields = fieldCandidates.filter((field) => selectedFieldKeys.includes(field.key));
+  const inactiveFields = fieldCandidates.filter((field) => !selectedFieldKeys.includes(field.key));
+
+  function renderFieldCard(field: FieldCandidate) {
+    const selected = selectedFieldKeys.includes(field.key);
+    const meta = roleMeta(field.role);
+    const splitChildCandidates = fieldCandidates.filter((candidate) => candidate.derived_from_key === field.key);
+    const splitSuggestions = splitCandidatesByParent[field.key] || [];
+    const isLoadingSplitSuggestions = loadingSplitParentKey === field.key;
+
+    return (
+      <div
+        key={field.key}
+        className={`rounded-2xl border p-4 ${
+          selected ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"
+        }`}
+      >
+        <button type="button" className="w-full text-left" onClick={() => toggleFieldSelection(field.key)}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-slate-900">
+                {field.label}
+                {field.unit ? ` (${field.unit})` : ""}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">{fieldTypeLabel(field.type)}</p>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">{meta.title}</span>
+              {field.is_default ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">初期選択</span> : null}
+              {field.is_custom ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">自分で追加</span> : null}
+              {splitSuggestedKeys.includes(field.key) ? <span className="rounded-full bg-white px-3 py-1 text-xs text-amber-800">細かく分ける候補</span> : null}
+              {field.derived_from_key ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">細分化項目</span> : null}
+              <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">{selected ? "使う" : "使わない"}</span>
+            </div>
+          </div>
+          <p className="mt-2 text-sm text-slate-600">{field.why || "この項目があると、あとで見比べやすくなります。"}</p>
+          {field.derived_from_key ? (
+            <p className="mt-2 text-xs text-amber-800">
+              細分化元: {fieldCandidates.find((candidate) => candidate.key === field.derived_from_key)?.label || field.derived_from_key}
+            </p>
+          ) : null}
+          {field.how_to_use ? <p className="mt-2 text-xs text-slate-500">使い方: {field.how_to_use}</p> : null}
+          {field.type === "select" && field.options.length > 0 ? (
+            <p className="mt-2 text-xs text-slate-500">例: {field.options.join(" / ")}</p>
+          ) : null}
+        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700"
+            onClick={() => startSplitField(field)}
+          >
+            この項目を細かく分ける
+          </button>
+          {splitChildCandidates.length > 0 ? (
+            <span className="rounded-full bg-white px-3 py-1 text-xs text-amber-800">
+              子項目候補: {splitChildCandidates.map((candidate) => candidate.label).join(" / ")}
+            </span>
+          ) : null}
+        </div>
+        {isLoadingSplitSuggestions ? (
+          <p className="mt-3 text-xs text-slate-500">AI がこの項目の子項目候補を考えています...</p>
+        ) : null}
+        {splitSuggestions.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {splitSuggestions.map((candidate) => (
+              <button
+                key={`${field.key}-${candidate.label}`}
+                type="button"
+                className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-900"
+                onClick={() => applySplitCandidate(field, candidate)}
+              >
+                {candidate.label} を追加
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <>
       <Card>
         <SectionTitle>問いを作る</SectionTitle>
         <p className="mt-2 text-sm text-slate-600">
-          同じ願いを育てるか、別の願いを始めるかを決めてから、問いの芽を整え、記録の仕方まで決めます。
+          同じ願いを育てるか、別の願いを始めるかを決めてから、問いの芽を整え、観測の仕方まで決めます。
         </p>
       </Card>
 
@@ -538,7 +801,7 @@ export function QuestionsClient({
             disabled={!hasActiveWish}
           >
             <p className="font-medium text-slate-900">今の願いを続ける</p>
-            <p className="mt-1 text-sm text-slate-600">{hasActiveWish ? "前の願いと振り返りを引き継ぐ" : "続ける願いはまだありません"}</p>
+            <p className="mt-1 text-sm text-slate-600">{hasActiveWish ? "同じ願いと観測項目を引き継ぐ" : "続ける願いはまだありません"}</p>
           </button>
           <button
             type="button"
@@ -637,7 +900,7 @@ export function QuestionsClient({
           <SectionTitle>4. 問いを1つ選ぶ</SectionTitle>
           {form.question_text ? <Pill>{getPrimaryPurposeFocusOption(form.purpose_focus).label}</Pill> : null}
         </div>
-        <p className="text-sm text-slate-600">本人の気になり方に近いものを選び、その問いで何を見るかを決めます。</p>
+        <p className="text-sm text-slate-600">本人の気になり方に近いものを選び、その問いで観測骨格のどこを見るかを決めます。</p>
         <div className="space-y-3">
           {candidates.length === 0 ? (
             <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">上の内容から候補を作ります。</p>
@@ -674,70 +937,39 @@ export function QuestionsClient({
 
       <Card className="space-y-4">
         <div className="flex items-center justify-between">
-          <SectionTitle>5. 記録項目を整える</SectionTitle>
+          <SectionTitle>5. 観測項目を整える</SectionTitle>
           {selectedFieldKeys.length > 0 ? <Pill>{selectedFieldKeys.length}項目を選択中</Pill> : null}
         </div>
-        <p className="text-sm text-slate-600">この問いを見るために、何を残すとよいかを決めます。AI の初期選択をそのまま使ってもかまいません。</p>
+        <p className="text-sm text-slate-600">この願いを見る観測項目のうち、今回の問いで使うものを決めます。AI の初期選択をそのまま使ってもかまいません。</p>
+        {splitSuggestedKeys.length > 0 ? (
+          <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            AI は、{splitSuggestedKeys.map((key) => fieldCandidates.find((field) => field.key === key)?.label || key).join(" / ")} を細かく分けると見やすいと提案しています。
+          </p>
+        ) : null}
         {isLoadingFields ? (
-          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">記録項目を整えています...</p>
+          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">観測項目を整えています...</p>
         ) : fieldCandidates.length === 0 ? (
-          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">問いを選ぶと、その問いに合う記録項目候補が出ます。</p>
+          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">問いを選ぶと、既存の観測項目と今回足す候補が出ます。</p>
         ) : (
           <div className="space-y-4">
-            {(["core", "compare", "optional"] as const).map((role) => {
-              const items = groupedFieldCandidates[role];
-
-              if (items.length === 0) {
-                return null;
-              }
-
-              const meta = roleMeta(role);
-
-              return (
-                <section key={role} className="space-y-3">
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">{meta.title}</p>
-                    <p className="text-xs text-slate-500">{meta.description}</p>
-                  </div>
-                  <div className="space-y-3">
-                    {items.map((field) => {
-                      const selected = selectedFieldKeys.includes(field.key);
-
-                      return (
-                        <button
-                          key={field.key}
-                          type="button"
-                          className={`w-full rounded-2xl border p-4 text-left ${
-                            selected ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"
-                          }`}
-                          onClick={() => toggleFieldSelection(field.key)}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="font-medium text-slate-900">
-                                {field.label}
-                                {field.unit ? ` (${field.unit})` : ""}
-                              </p>
-                              <p className="mt-1 text-xs text-slate-500">{fieldTypeLabel(field.type)}</p>
-                            </div>
-                            <div className="flex flex-wrap justify-end gap-2">
-                              {field.is_default ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">初期選択</span> : null}
-                              {field.is_custom ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">自分で追加</span> : null}
-                              <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">{selected ? "使う" : "使わない"}</span>
-                            </div>
-                          </div>
-                          <p className="mt-2 text-sm text-slate-600">{field.why || "この項目があると、あとで見比べやすくなります。"}</p>
-                          {field.how_to_use ? <p className="mt-2 text-xs text-slate-500">使い方: {field.how_to_use}</p> : null}
-                          {field.type === "select" && field.options.length > 0 ? (
-                            <p className="mt-2 text-xs text-slate-500">例: {field.options.join(" / ")}</p>
-                          ) : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              );
-            })}
+            <section className="space-y-3">
+              <div>
+                <p className="text-sm font-medium text-slate-900">今回注目する項目</p>
+                <p className="text-xs text-slate-500">今の問いで実際に見る観測項目です。</p>
+              </div>
+              <div className="space-y-3">
+                {selectedFields.length > 0 ? selectedFields.map(renderFieldCard) : <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">使う項目を選んでください。</p>}
+              </div>
+            </section>
+            <section className="space-y-3">
+              <div>
+                <p className="text-sm font-medium text-slate-900">今回は使わない項目</p>
+                <p className="text-xs text-slate-500">願いの観測骨格には残しつつ、今回は外しておく項目です。</p>
+              </div>
+              <div className="space-y-3">
+                {inactiveFields.length > 0 ? inactiveFields.map(renderFieldCard) : <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">すべての項目を今回使います。</p>}
+              </div>
+            </section>
           </div>
         )}
         {fieldCandidates.length > 0 ? (
@@ -746,7 +978,7 @@ export function QuestionsClient({
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-900">この項目も見たい</p>
-                  <p className="text-xs text-slate-500">たとえば 対戦相手 / ステージ / 時間帯 のような項目を1件足せます。</p>
+                  <p className="text-xs text-slate-500">たとえば 対戦相手 / ステージ / 時間帯 のような観測項目を1件足せます。</p>
                 </div>
                 <button type="button" className="btn-secondary w-full md:w-auto" onClick={() => setIsAddingCustomField(true)}>
                   自分で項目を足す
@@ -756,8 +988,12 @@ export function QuestionsClient({
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-slate-900">見たい項目を追加する</p>
-                    <p className="text-xs text-slate-500">その問いで見たい観点を1件だけ足します。</p>
+                    <p className="text-sm font-medium text-slate-900">
+                      {customFieldForm.derivedFromKey ? "細分化を追加する" : "見たい項目を追加する"}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {customFieldForm.derivedFromKey ? "選んだ項目を細かく見るための子項目を足します。" : "この願いで見続けたい観点を1件だけ足します。"}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -814,6 +1050,26 @@ export function QuestionsClient({
                       onChange={(event) => setCustomFieldForm((current) => ({ ...current, howToUse: event.target.value }))}
                       placeholder="相手ごとに違いがあるか見比べる"
                     />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="field-label">どの項目を細かく分けたものか</label>
+                    <select
+                      value={customFieldForm.derivedFromKey}
+                      onChange={(event) =>
+                        setCustomFieldForm((current) => ({
+                          ...current,
+                          derivedFromKey: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">指定しない</option>
+                      {fieldCandidates.map((field) => (
+                        <option key={field.key} value={field.key}>
+                          {field.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-slate-500">既存項目をより細かく見たいときだけ選びます。</p>
                   </div>
                   {customFieldForm.type === "select" ? (
                     <div className="md:col-span-2">

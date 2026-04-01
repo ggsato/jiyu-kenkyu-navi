@@ -93,8 +93,9 @@ model Wish {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  questions Question[]
+  user                 User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questions            Question[]
+  observationFields    ObservationFieldDefinition[]
 
   @@index([userId, createdAt])
 }
@@ -109,10 +110,10 @@ model Question {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
-  wish        Wish         @relation(fields: [wishId], references: [id], onDelete: Cascade)
-  records     Record[]
-  reflections Reflection[]
-  fieldDefinitions QuestionFieldDefinition[]
+  wish                Wish                     @relation(fields: [wishId], references: [id], onDelete: Cascade)
+  records             Record[]
+  reflections         Reflection[]
+  observationFocuses  QuestionObservationFocus[]
 
   @@index([wishId, status, createdAt])
 }
@@ -166,24 +167,46 @@ model Reflection {
   @@index([questionId, reflectionDate])
 }
 
-model QuestionFieldDefinition {
-  id         String            @id @default(cuid())
-  questionId String
-  key        String
-  label      String
-  type       RecordFieldType
-  unit       String?
-  options    String[]          @default([])
-  role       QuestionFieldRole @default(core)
-  why        String?
-  howToUse   String?
-  isDefault  Boolean           @default(false)
-  sortOrder  Int               @default(0)
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
+model ObservationFieldDefinition {
+  id                 String                        @id @default(cuid())
+  wishId             String
+  key                String
+  label              String
+  type               RecordFieldType
+  unit               String?
+  options            String[]                      @default([])
+  role               QuestionFieldRole             @default(core)
+  why                String?
+  howToUse           String?
+  isDefault          Boolean                       @default(false)
+  sortOrder          Int                           @default(0)
+  derivedFromFieldId String?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
 
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  wish             Wish                         @relation(fields: [wishId], references: [id], onDelete: Cascade)
+  derivedFromField ObservationFieldDefinition? @relation("ObservationFieldLineage", fields: [derivedFromFieldId], references: [id], onDelete: SetNull)
+  childFields      ObservationFieldDefinition[] @relation("ObservationFieldLineage")
+  questionFocuses  QuestionObservationFocus[]
 
-  @@unique([questionId, key])
+  @@unique([wishId, key])
+  @@index([wishId, sortOrder])
+  @@index([derivedFromFieldId])
+}
+
+model QuestionObservationFocus {
+  id                String                     @id @default(cuid())
+  questionId        String
+  fieldDefinitionId String
+  isSelected        Boolean                    @default(true)
+  sortOrder         Int                        @default(0)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  question        Question                    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  fieldDefinition ObservationFieldDefinition  @relation(fields: [fieldDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, fieldDefinitionId])
   @@index([questionId, sortOrder])
+  @@index([fieldDefinitionId])
 }

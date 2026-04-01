@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateRecordFieldSuggestions } from "@/lib/ai";
 import { recordFieldsSuggestSchema } from "@/lib/validation";
+import { buildWishObservationFieldCandidates } from "@/lib/question-field-definitions";
 
 export async function POST(request: NextRequest) {
   try {
     const json = await request.json();
     const input = recordFieldsSuggestSchema.parse(json);
-    const result = await generateRecordFieldSuggestions(input);
+    const result = await buildWishObservationFieldCandidates(input.wish_id, input.question_text, input.purpose_focus, input);
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      suggested_fields: result.fields,
+      selected_existing_keys: result.selectedExistingKeys,
+      split_existing_keys: result.splitExistingKeys,
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json({
