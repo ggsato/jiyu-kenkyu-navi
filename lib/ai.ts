@@ -156,8 +156,15 @@ export async function generateRecordFieldSuggestions(input: Record<string, unkno
     ? (input.existing_fields as Array<Record<string, unknown>>).map((field) => ({
         key: String(field.key || ""),
         label: String(field.label || ""),
+        type: String(field.type || ""),
+        unit: field.unit == null ? null : String(field.unit),
+        options: Array.isArray(field.options) ? field.options.map((option) => String(option)) : [],
         role: String(field.role || ""),
         why: String(field.why || ""),
+        how_to_use: String(field.how_to_use || ""),
+        selected_count: Number(field.selected_count || 0),
+        presented_count: Number(field.presented_count || 0),
+        is_currently_selected: Boolean(field.is_currently_selected),
       })).filter((field) => field.key && field.label)
     : [];
   const result = await createJson(
@@ -169,8 +176,11 @@ export async function generateRecordFieldSuggestions(input: Record<string, unkno
       "ただし question_text と wish_text に書かれていない具体物を勝手に足してはいけません。",
       "項目と選択肢は、入力された問いと願いの文脈に直接対応している必要があります。",
       existingFields.length > 0
-        ? `この願いの既存観測項目は ${existingFields.map((field) => `${field.key}:${field.label}`).join(", ")} です。まずこの中で今回注目する項目を選び、足りないときだけ新しい項目を提案してください。`
+        ? `この願いの既存観測項目は ${existingFields.map((field) => `${field.key}:${field.label}:${field.type}${field.unit ? `:${field.unit}` : ""}${field.options.length > 0 ? `:${field.options.join("/")}` : ""}:selected=${field.selected_count}:presented=${field.presented_count}:current=${field.is_currently_selected ? "yes" : "no"}`).join(", ")} です。まずこの中で今回注目する項目を選び、足りないときだけ新しい項目を提案してください。`
         : "まだ既存の観測項目はありません。長く使えそうな観測軸を優先してください。",
+      existingFields.length > 0
+        ? "同じ意味の項目を出し直すのではなく、既存項目の unit/type/options/how_to_use をできるだけ引き継いでください。長く使われている項目ほど優先してください。"
+        : "",
       existingFields.length > 0
         ? "必要なら、既存項目のうちどれを細かく分けるとよいかも提案してください。"
         : "",
@@ -341,6 +351,10 @@ export async function generateSplitFieldSuggestions(input: Record<string, unknow
       "ルール:",
       "- 2〜4件",
       "- 親項目そのものと同じ意味の項目は出さない",
+      "- 選択肢を増やすだけの言い換えではなく、何を見分けるかが変わる子項目だけを出す",
+      "- 親項目の options を言い換えで並べ直しただけの案は出さない",
+      "- why には、何の違いが見えるようになるかを書く",
+      "- how_to_use には、その子項目であとでどう比べるかを書く",
       "- derived_from_key は必ず親項目の key にする",
       "- 既存 key と重複する key は出さない",
       "- label は12文字以内",
@@ -375,6 +389,20 @@ export async function generateSplitFieldSuggestions(input: Record<string, unknow
         .map((field) => field.data)
         .filter((field) => field.derived_from_key === parentFieldKey)
         .filter((field) => !existingKeys.includes(field.key))
+        .filter((field) => {
+          const normalizedParent = parentFieldLabel.replace(/\s+/g, "");
+          const normalizedLabel = field.label.replace(/\s+/g, "");
+
+          if (normalizedParent === normalizedLabel || normalizedParent.includes(normalizedLabel) || normalizedLabel.includes(normalizedParent)) {
+            return false;
+          }
+
+          if ((field.why || "").trim().length === 0 || (field.how_to_use || "").trim().length === 0) {
+            return false;
+          }
+
+          return true;
+        })
         .slice(0, 4)
     : [];
 

@@ -5,6 +5,7 @@ import { logEvent } from "@/lib/logging";
 import {
   buildWishObservationFieldCandidates,
   createQuestionObservationFocuses,
+  pruneNeverSelectedObservationFields,
   upsertObservationFieldDefinitions,
 } from "@/lib/question-field-definitions";
 import { Prisma } from "@prisma/client";
@@ -103,6 +104,7 @@ export async function POST(request: NextRequest) {
       const fieldDefinitions = await upsertObservationFieldDefinitions(tx, wish.id, fieldDefinitionInputs);
       const selectedFieldKeys = fieldDefinitionInputs.filter((field) => field.isSelected !== false).map((field) => field.key);
       const observationFocuses = await createQuestionObservationFocuses(tx, question.id, fieldDefinitions, selectedFieldKeys);
+      await pruneNeverSelectedObservationFields(tx, wish.id, selectedFieldKeys);
 
       return { wish, question, fieldDefinitions, observationFocuses };
     });
