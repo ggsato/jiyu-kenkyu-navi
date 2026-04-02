@@ -801,7 +801,7 @@ export function QuestionsClient({
             disabled={!hasActiveWish}
           >
             <p className="font-medium text-slate-900">今の願いを続ける</p>
-            <p className="mt-1 text-sm text-slate-600">{hasActiveWish ? "同じ願いと観測項目を引き継ぐ" : "続ける願いはまだありません"}</p>
+            <p className="mt-1 text-sm text-slate-600">{hasActiveWish ? "同じ願いと見てきた項目を引き継ぐ" : "続ける願いはまだありません"}</p>
           </button>
           <button
             type="button"
@@ -824,19 +824,19 @@ export function QuestionsClient({
                 title: "今できていること",
                 before: continueSummary.before_current_state,
                 after: continueSummary.after_current_state,
-                note: "今日わかったことを引き継ぐ",
+                note: "今日気づいたことを引き継ぐ",
               },
               {
                 title: "まだできていないこと",
                 before: continueSummary.before_not_yet,
                 after: continueSummary.after_not_yet,
-                note: "まだわからないことを引き継ぐ",
+                note: "まだ気になることを引き継ぐ",
               },
               {
                 title: "できるようになりたいこと",
                 before: continueSummary.before_desired_state,
                 after: continueSummary.after_desired_state,
-                note: "次にやりたいことを引き継ぐ",
+                note: "次にやってみたいことを引き継ぐ",
               },
             ].map((item) => (
               <div key={item.title} className="rounded-2xl bg-slate-50 p-4">
@@ -900,7 +900,7 @@ export function QuestionsClient({
           <SectionTitle>4. 問いを1つ選ぶ</SectionTitle>
           {form.question_text ? <Pill>{getPrimaryPurposeFocusOption(form.purpose_focus).label}</Pill> : null}
         </div>
-        <p className="text-sm text-slate-600">本人の気になり方に近いものを選び、その問いで観測骨格のどこを見るかを決めます。</p>
+        <p className="text-sm text-slate-600">本人の気になり方に近いものを選び、その問いでどこを見ていくかを決めます。</p>
         <div className="space-y-3">
           {candidates.length === 0 ? (
             <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">上の内容から候補を作ります。</p>
@@ -937,25 +937,25 @@ export function QuestionsClient({
 
       <Card className="space-y-4">
         <div className="flex items-center justify-between">
-          <SectionTitle>5. 観測項目を整える</SectionTitle>
+          <SectionTitle>5. 見る項目を整える</SectionTitle>
           {selectedFieldKeys.length > 0 ? <Pill>{selectedFieldKeys.length}項目を選択中</Pill> : null}
         </div>
-        <p className="text-sm text-slate-600">この願いを見る観測項目のうち、今回の問いで使うものを決めます。AI の初期選択をそのまま使ってもかまいません。</p>
+        <p className="text-sm text-slate-600">この願いを見る項目のうち、今回の問いで使うものを決めます。AI の初期選択をそのまま使ってもかまいません。</p>
         {splitSuggestedKeys.length > 0 ? (
           <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            AI は、{splitSuggestedKeys.map((key) => fieldCandidates.find((field) => field.key === key)?.label || key).join(" / ")} を細かく分けると見やすいと提案しています。
+            AI は、{splitSuggestedKeys.map((key) => fieldCandidates.find((field) => field.key === key)?.label || key).join(" / ")} を分けて見ると、ちがいが見つけやすいと提案しています。
           </p>
         ) : null}
         {isLoadingFields ? (
-          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">観測項目を整えています...</p>
+          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">見る項目を整えています...</p>
         ) : fieldCandidates.length === 0 ? (
-          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">問いを選ぶと、既存の観測項目と今回足す候補が出ます。</p>
+          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">問いを選ぶと、今まで見てきた項目と今回足す候補が出ます。</p>
         ) : (
           <div className="space-y-4">
             <section className="space-y-3">
               <div>
-                <p className="text-sm font-medium text-slate-900">今回注目する項目</p>
-                <p className="text-xs text-slate-500">今の問いで実際に見る観測項目です。</p>
+                <p className="text-sm font-medium text-slate-900">今回よく見る項目</p>
+                <p className="text-xs text-slate-500">今の問いで特によく見る項目です。</p>
               </div>
               <div className="space-y-3">
                 {selectedFields.length > 0 ? selectedFields.map(renderFieldCard) : <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">使う項目を選んでください。</p>}
@@ -963,8 +963,8 @@ export function QuestionsClient({
             </section>
             <section className="space-y-3">
               <div>
-                <p className="text-sm font-medium text-slate-900">今回は使わない項目</p>
-                <p className="text-xs text-slate-500">願いの観測骨格には残しつつ、今回は外しておく項目です。</p>
+                <p className="text-sm font-medium text-slate-900">今回はお休みする項目</p>
+                <p className="text-xs text-slate-500">この願いの見方には残しつつ、今回は外しておく項目です。</p>
               </div>
               <div className="space-y-3">
                 {inactiveFields.length > 0 ? inactiveFields.map(renderFieldCard) : <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">すべての項目を今回使います。</p>}
@@ -978,7 +978,7 @@ export function QuestionsClient({
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="text-sm font-medium text-slate-900">この項目も見たい</p>
-                  <p className="text-xs text-slate-500">たとえば 対戦相手 / ステージ / 時間帯 のような観測項目を1件足せます。</p>
+                  <p className="text-xs text-slate-500">たとえば 対戦相手 / ステージ / 時間帯 のような、見たい項目を1件足せます。</p>
                 </div>
                 <button type="button" className="btn-secondary w-full md:w-auto" onClick={() => setIsAddingCustomField(true)}>
                   自分で項目を足す
@@ -989,10 +989,10 @@ export function QuestionsClient({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-slate-900">
-                      {customFieldForm.derivedFromKey ? "細分化を追加する" : "見たい項目を追加する"}
+                      {customFieldForm.derivedFromKey ? "細かい項目を追加する" : "見たい項目を追加する"}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {customFieldForm.derivedFromKey ? "選んだ項目を細かく見るための子項目を足します。" : "この願いで見続けたい観点を1件だけ足します。"}
+                      {customFieldForm.derivedFromKey ? "選んだ項目を細かく見るための子項目を足します。" : "この願いで見続けたいことを1件だけ足します。"}
                     </p>
                   </div>
                   <button

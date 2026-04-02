@@ -36,7 +36,7 @@ export default async function ReflectionPage() {
       <UserSwitcher users={users} currentUserId={currentUserId} />
       <Card>
         <SectionTitle>振り返り</SectionTitle>
-        <p className="mt-2 text-sm text-slate-600">今日わかったこと、まだわからないこと、次にやりたいことを短く残します。</p>
+        <p className="mt-2 text-sm text-slate-600">今日気づいたことや、まだ気になること、次にやってみたいことを短く残します。</p>
       </Card>
       <ReflectionClient
         activeQuestionId={activeQuestion?.id || ""}
