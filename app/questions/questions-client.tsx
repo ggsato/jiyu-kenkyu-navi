@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Card, Pill, SectionTitle } from "@/components/ui";
+import { Card, LoadingBlock, Pill, SectionTitle } from "@/components/ui";
 import { INPUT_LIMITS, limitLabel } from "@/lib/input-limits";
 import { getPrimaryPurposeFocusOption, normalizePurposeFocus } from "@/lib/purpose-focus";
 
@@ -113,6 +113,27 @@ function fieldTypeLabel(type: FieldCandidate["type"]) {
   }
 
   return "短く書く";
+}
+
+function candidateShapeMeta(shapeLabel: string) {
+  if (shapeLabel.includes("くらべ")) {
+    return {
+      className: "bg-sky-100 text-sky-900",
+      label: shapeLabel,
+    };
+  }
+
+  if (shapeLabel.includes("小さ")) {
+    return {
+      className: "bg-emerald-100 text-emerald-900",
+      label: shapeLabel,
+    };
+  }
+
+  return {
+    className: "bg-amber-100 text-amber-900",
+    label: shapeLabel,
+  };
 }
 
 function getDefaultSelectedFieldKeys(fields: FieldCandidate[], preferredKeys: string[] = []) {
@@ -334,6 +355,11 @@ export function QuestionsClient({
     derivedFromKey: "",
   });
   const [customFieldError, setCustomFieldError] = useState("");
+  const [highlightedSection, setHighlightedSection] = useState<"candidates" | "fields" | "">("");
+  const candidatesSectionRef = useRef<HTMLElement | null>(null);
+  const fieldsSectionRef = useRef<HTMLElement | null>(null);
+  const previousCandidateCountRef = useRef(candidates.length);
+  const previousFieldCountRef = useRef(fieldCandidates.length);
 
   useEffect(() => {
     window.sessionStorage.setItem(formStorageKey(mode), JSON.stringify(form));
@@ -346,6 +372,40 @@ export function QuestionsClient({
   useEffect(() => {
     window.sessionStorage.setItem(fieldConfigStorageKey(mode), JSON.stringify({ fieldCandidates, selectedFieldKeys, splitSuggestedKeys, splitCandidatesByParent }));
   }, [fieldCandidates, selectedFieldKeys, splitSuggestedKeys, splitCandidatesByParent, mode]);
+
+  useEffect(() => {
+    if (candidates.length > 0 && previousCandidateCountRef.current === 0) {
+      window.setTimeout(() => {
+        setHighlightedSection("candidates");
+        candidatesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    }
+
+    previousCandidateCountRef.current = candidates.length;
+  }, [candidates.length]);
+
+  useEffect(() => {
+    if (fieldCandidates.length > 0 && previousFieldCountRef.current === 0) {
+      window.setTimeout(() => {
+        setHighlightedSection("fields");
+        fieldsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    }
+
+    previousFieldCountRef.current = fieldCandidates.length;
+  }, [fieldCandidates.length]);
+
+  useEffect(() => {
+    if (!highlightedSection) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setHighlightedSection("");
+    }, 2200);
+
+    return () => window.clearTimeout(timer);
+  }, [highlightedSection]);
 
   function templateForMode(nextMode: "continue" | "new") {
     return nextMode === "continue" ? continueTemplate : newTemplate;
@@ -711,8 +771,8 @@ export function QuestionsClient({
     return (
       <div
         key={field.key}
-        className={`rounded-2xl border p-4 ${
-          selected ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"
+        className={`rounded-2xl border p-4 transition ${
+          selected ? "border-amber-400 bg-amber-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"
         }`}
       >
         <button type="button" className="w-full text-left" onClick={() => toggleFieldSelection(field.key)}>
@@ -725,14 +785,15 @@ export function QuestionsClient({
               <p className="mt-1 text-xs text-slate-500">{fieldTypeLabel(field.type)}</p>
             </div>
             <div className="flex flex-wrap justify-end gap-2">
-              <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">{meta.title}</span>
+              <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white">{meta.title}</span>
               {field.is_default ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">初期選択</span> : null}
               {field.is_custom ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">自分で追加</span> : null}
               {splitSuggestedKeys.includes(field.key) ? <span className="rounded-full bg-white px-3 py-1 text-xs text-amber-800">細かく分ける候補</span> : null}
               {field.derived_from_key ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">細分化項目</span> : null}
-              <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">{selected ? "使う" : "使わない"}</span>
+              <span className={`rounded-full px-3 py-1 text-xs ${selected ? "bg-amber-200 text-amber-950" : "bg-slate-100 text-slate-700"}`}>{selected ? "今回使う" : "今回は休む"}</span>
             </div>
           </div>
+          <p className="mt-2 text-xs font-medium text-slate-700">{meta.description}</p>
           <p className="mt-2 text-sm text-slate-600">{field.why || "この項目があると、あとで見比べやすくなります。"}</p>
           {field.derived_from_key ? (
             <p className="mt-2 text-xs text-amber-800">
@@ -901,9 +962,18 @@ export function QuestionsClient({
         <button type="button" className="btn-primary w-full md:w-auto" onClick={generateCandidates} disabled={isGenerating}>
           {isGenerating ? "問いを考え中..." : "3. 問い候補を出す"}
         </button>
+        {isGenerating ? (
+          <LoadingBlock
+            title="問い候補を整えています"
+            description="願いの言葉から離れすぎない形で、試しやすい候補をまとめています。"
+          />
+        ) : null}
       </Card>
 
-      <Card className="space-y-4">
+      <Card
+        className={`space-y-4 transition ${highlightedSection === "candidates" ? "ring-2 ring-amber-300 ring-offset-2 ring-offset-[var(--bg)]" : ""}`}
+      >
+        <section ref={candidatesSectionRef} className="space-y-4">
         <div className="flex items-center justify-between">
           <SectionTitle>4. 問いを1つ選ぶ</SectionTitle>
           {form.question_text ? <Pill>{getPrimaryPurposeFocusOption(form.purpose_focus).label}</Pill> : null}
@@ -917,21 +987,23 @@ export function QuestionsClient({
               const normalizedPurpose = normalizePurposeFocus(candidate.purpose_hint);
               const purpose = getPrimaryPurposeFocusOption(normalizedPurpose);
               const selected = form.question_text === candidate.text && form.purpose_focus === normalizedPurpose;
+              const shape = candidateShapeMeta(candidate.shape_label);
 
               return (
                 <button
                   key={`${candidate.text}-${candidate.purpose_hint}`}
                   type="button"
                   className={`w-full rounded-2xl border p-4 text-left ${
-                    selected ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white hover:border-amber-300 hover:bg-amber-50"
+                    selected ? "border-amber-400 bg-amber-50 shadow-sm" : "border-slate-200 bg-white hover:border-amber-300 hover:bg-amber-50"
                   }`}
                   onClick={() => selectCandidate(candidate)}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-medium text-slate-900">{candidate.text}</p>
                     <div className="flex flex-wrap justify-end gap-2">
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">{candidate.shape_label}</span>
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">{purpose.label}</span>
+                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${shape.className}`}>{shape.label}</span>
+                      <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">{purpose.label}</span>
+                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${selected ? "bg-amber-200 text-amber-950" : "bg-slate-100 text-slate-700"}`}>{selected ? "選択中" : "選ぶ"}</span>
                     </div>
                   </div>
                   <p className="mt-2 text-sm text-slate-600">{candidate.why_this_question}</p>
@@ -941,21 +1013,42 @@ export function QuestionsClient({
             })
           )}
         </div>
+        </section>
       </Card>
 
-      <Card className="space-y-4">
+      <Card
+        className={`space-y-4 transition ${highlightedSection === "fields" ? "ring-2 ring-amber-300 ring-offset-2 ring-offset-[var(--bg)]" : ""}`}
+      >
+        <section ref={fieldsSectionRef} className="space-y-4">
         <div className="flex items-center justify-between">
           <SectionTitle>5. 見る項目を整える</SectionTitle>
           {selectedFieldKeys.length > 0 ? <Pill>{selectedFieldKeys.length}項目を選択中</Pill> : null}
         </div>
         <p className="text-sm text-slate-600">この願いを見る項目のうち、今回の問いで使うものを決めます。AI の初期選択をそのまま使ってもかまいません。</p>
+        {fieldCandidates.length > 0 ? (
+          <div className="grid gap-3 md:grid-cols-3">
+            {(["core", "compare", "optional"] as const).map((role) => {
+              const meta = roleMeta(role);
+              return (
+                <div key={role} className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-900">{meta.title}</p>
+                  <p className="mt-1 text-xs text-slate-600">{meta.description}</p>
+                  <p className="mt-3 text-xs font-medium text-slate-500">{groupedFieldCandidates[role].length}件</p>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
         {splitSuggestedKeys.length > 0 ? (
           <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
             AI は、{splitSuggestedKeys.map((key) => fieldCandidates.find((field) => field.key === key)?.label || key).join(" / ")} を分けて見ると、ちがいが見つけやすいと提案しています。
           </p>
         ) : null}
         {isLoadingFields ? (
-          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">見る項目を整えています...</p>
+          <LoadingBlock
+            title="見る項目を整えています"
+            description="まず残す項目、違いを見る項目、あとで足す項目に分けて候補をまとめています。"
+          />
         ) : fieldCandidates.length === 0 ? (
           <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">問いを選ぶと、今まで見てきた項目と今回足す候補が出ます。</p>
         ) : (
@@ -1113,6 +1206,13 @@ export function QuestionsClient({
         >
           {isSaving ? "保存中..." : "6. この問いで始める"}
         </button>
+        {isSaving ? (
+          <LoadingBlock
+            title="この問いを保存しています"
+            description="選んだ問いと今回の見方を、同じ願いの流れにつなげています。"
+          />
+        ) : null}
+        </section>
       </Card>
     </>
   );
