@@ -36,6 +36,10 @@ export const createQuestionSchema = questionCandidateRequestSchema.extend({
   field_definitions: z.array(selectedFieldDefinitionSchema).optional().default([]),
 });
 
+export const updateActiveQuestionFieldDefinitionsSchema = z.object({
+  field_definitions: z.array(selectedFieldDefinitionSchema).min(1, "記録項目を1件以上入れてください"),
+});
+
 export const createRecordSchema = z.object({
   question_id: z.string().min(1),
   recorded_at: z.string().datetime().optional(),

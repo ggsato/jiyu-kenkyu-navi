@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, Pill, SectionTitle } from "@/components/ui";
+import { ObservationFieldEditor, type EditableObservationField } from "@/components/observation-field-editor";
 import { INPUT_LIMITS, limitLabel } from "@/lib/input-limits";
 import { getPrimaryPurposeFocusOption, normalizePurposeFocus } from "@/lib/purpose-focus";
 
@@ -30,23 +31,39 @@ type RecordItem = {
   attachments: Array<{ id: string; storageKey: string; mimeType: string }>;
 };
 
+function toLocalDateTimeInputValue(date: Date) {
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16);
+}
+
+function sortRecordsByRecordedAt(records: RecordItem[]) {
+  return [...records].sort(
+    (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime(),
+  );
+}
+
 export function RecordsClient({
   activeQuestionId,
   activeQuestionText,
   activePurposeFocus,
   records,
   fieldDefinitions,
+  allFieldDefinitions,
 }: {
   activeQuestionId: string;
   activeQuestionText: string;
   activePurposeFocus: string;
   records: RecordItem[];
   fieldDefinitions: FieldDefinition[];
+  allFieldDefinitions: EditableObservationField[];
 }) {
   const params = useSearchParams();
   const source = params.get("source") || "";
   const [items, setItems] = useState(records);
+  const [currentFieldDefinitions, setCurrentFieldDefinitions] = useState(fieldDefinitions);
+  const [editableFieldDefinitions, setEditableFieldDefinitions] = useState(allFieldDefinitions);
   const [memo, setMemo] = useState("");
+  const [recordedAt, setRecordedAt] = useState(() => toLocalDateTimeInputValue(new Date()));
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [kvFields, setKvFields] = useState<Record<string, string | number | boolean>>(() =>
@@ -67,7 +84,7 @@ export function RecordsClient({
   const purpose = getPrimaryPurposeFocusOption(normalizePurposeFocus(activePurposeFocus));
 
   function buildRecordBody() {
-    const parts = fieldDefinitions
+    const parts = currentFieldDefinitions
       .map((field) => {
         const value = kvFields[field.key];
 
@@ -136,14 +153,15 @@ export function RecordsClient({
     setError("");
 
     startTransition(async () => {
-      const response = await fetch("/api/records", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question_id: activeQuestionId,
-          body: buildRecordBody(),
-          memo,
-          kv_fields: kvFields,
+    const response = await fetch("/api/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question_id: activeQuestionId,
+        recorded_at: new Date(recordedAt).toISOString(),
+        body: buildRecordBody(),
+        memo,
+        kv_fields: kvFields,
           tags: [],
           source,
         }),
@@ -173,13 +191,14 @@ export function RecordsClient({
         setError(attachmentError instanceof Error ? attachmentError.message : "画像を保存できませんでした");
       }
 
-      setItems((current) => [nextRecord, ...current]);
+      setItems((current) => sortRecordsByRecordedAt([nextRecord, ...current]));
       setMemo("");
+      setRecordedAt(toLocalDateTimeInputValue(new Date()));
       setSelectedFiles([]);
       setFileInputKey((current) => current + 1);
       setKvFields(
         Object.fromEntries(
-          fieldDefinitions.map((field) => [field.key, field.type === "boolean" ? false : ""]),
+          currentFieldDefinitions.map((field) => [field.key, field.type === "boolean" ? false : ""]),
         ),
       );
     });
@@ -206,9 +225,14 @@ export function RecordsClient({
           </p>
         </div>
         <div>
+          <label className="field-label">いつの記録か</label>
+          <p className="mb-2 text-xs text-slate-500">時間情報は基本項目です。あとで順番や変化を見返せるよう、毎回ここから記録します。</p>
+          <input type="datetime-local" value={recordedAt} onChange={(event) => setRecordedAt(event.target.value)} />
+        </div>
+        <div>
           <label className="field-label">今回よく見る項目</label>
           <div className="space-y-3">
-            {fieldDefinitions.map((field) => (
+            {currentFieldDefinitions.map((field) => (
               <div key={field.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <label className="field-label">
                   {field.label}
@@ -262,7 +286,7 @@ export function RecordsClient({
                 )}
               </div>
             ))}
-            {fieldDefinitions.length === 0 ? <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">この問いで使う項目はまだありません。</p> : null}
+            {currentFieldDefinitions.length === 0 ? <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">この問いで使う項目はまだありません。</p> : null}
           </div>
         </div>
         <div>
@@ -299,7 +323,37 @@ export function RecordsClient({
       </Card>
 
       <Card>
+        <ObservationFieldEditor
+          fields={editableFieldDefinitions}
+          onSaved={({ currentFields, allFields }) => {
+            setEditableFieldDefinitions(allFields);
+            setCurrentFieldDefinitions(
+              currentFields.map((field) => ({
+                id: field.id,
+                key: field.key,
+                label: field.label,
+                type: field.type,
+                unit: field.unit,
+                options: field.options,
+                role: field.role,
+                why: field.why,
+                howToUse: field.howToUse,
+                isDefault: field.isDefault,
+                parentLabel: field.derivedFromLabel,
+              })),
+            );
+            setKvFields(
+              Object.fromEntries(
+                currentFields.map((field) => [field.key, field.type === "boolean" ? false : ""]),
+              ),
+            );
+          }}
+        />
+      </Card>
+
+      <Card className="md:col-span-2">
         <SectionTitle>記録一覧</SectionTitle>
+        <p className="mt-2 text-sm text-slate-600">新しい順に並びます。時間情報を毎回残すことで、あとで変化の順番を追えます。</p>
         <div className="mt-4 space-y-4">
           {items.length === 0 ? (
             <p className="text-slate-600">まだ記録はありません。</p>
@@ -312,7 +366,7 @@ export function RecordsClient({
                 {Object.keys(item.kvFields).length > 0 ? (
                   <dl className="mt-3 space-y-2 rounded-xl bg-white p-3 text-sm text-slate-700">
                     {Object.entries(item.kvFields).map(([key, value]) => {
-                      const field = fieldDefinitions.find((definition) => definition.key === key);
+                      const field = editableFieldDefinitions.find((definition) => definition.key === key);
                       return (
                         <div key={key} className="grid grid-cols-[8rem_1fr] gap-2">
                           <dt className="text-slate-500">{field?.label || key}</dt>

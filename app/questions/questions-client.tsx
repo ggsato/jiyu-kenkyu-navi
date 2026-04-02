@@ -501,7 +501,7 @@ export function QuestionsClient({
       const aiPreferredKeys = Array.isArray(data.selected_existing_keys) ? data.selected_existing_keys : [];
       const nextSplitSuggestedKeys = Array.isArray(data.split_existing_keys) ? data.split_existing_keys : [];
       const mergedPreferredKeys = mode === "continue"
-        ? Array.from(new Set([...preferredFieldKeys, ...aiPreferredKeys]))
+        ? Array.from(new Set([...aiPreferredKeys, ...preferredFieldKeys]))
         : aiPreferredKeys;
       setFieldCandidates(nextFieldCandidates);
       setSplitSuggestedKeys(nextSplitSuggestedKeys);
@@ -762,16 +762,24 @@ export function QuestionsClient({
           <p className="mt-3 text-xs text-slate-500">AI がこの項目の子項目候補を考えています...</p>
         ) : null}
         {splitSuggestions.length > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 space-y-2">
             {splitSuggestions.map((candidate) => (
-              <button
-                key={`${field.key}-${candidate.label}`}
-                type="button"
-                className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-900"
-                onClick={() => applySplitCandidate(field, candidate)}
-              >
-                {candidate.label} を追加
-              </button>
+              <div key={`${field.key}-${candidate.label}`} className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-amber-900">{candidate.label}</p>
+                    {candidate.why ? <p className="mt-1 text-xs text-amber-900/80">{candidate.why}</p> : null}
+                    {candidate.how_to_use ? <p className="mt-1 text-xs text-slate-600">使い方: {candidate.how_to_use}</p> : null}
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs text-amber-900"
+                    onClick={() => applySplitCandidate(field, candidate)}
+                  >
+                    追加する
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         ) : null}

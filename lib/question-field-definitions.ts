@@ -28,6 +28,10 @@ type FieldContext = {
 export type ExistingFieldLike = FieldDefinitionInput & {
   id: string;
   sortOrder: number;
+  selectedCount?: number;
+  presentedCount?: number;
+  lastSelectedAt?: string | null;
+  isCurrentlySelected?: boolean;
 };
 
 export type ObservationFieldCandidateResult = {
@@ -249,11 +253,83 @@ function toFieldInput(field: ExistingFieldLike | FieldDefinitionInput) {
   } satisfies FieldDefinitionInput;
 }
 
+function prioritizeExistingFieldKeys(fields: ExistingFieldLike[]) {
+  return [...fields]
+    .sort((a, b) => {
+      const scoreA = (a.isCurrentlySelected ? 40 : 0) + (a.selectedCount || 0) * 10 + (a.presentedCount || 0);
+      const scoreB = (b.isCurrentlySelected ? 40 : 0) + (b.selectedCount || 0) * 10 + (b.presentedCount || 0);
+
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA;
+      }
+
+      return a.sortOrder - b.sortOrder;
+    })
+    .map((field) => field.key);
+}
+
 async function listWishObservationFieldDefinitions(wishId: string): Promise<ExistingFieldLike[]> {
-  const fields = await prisma.observationFieldDefinition.findMany({
-    where: { wishId },
-    orderBy: { sortOrder: "asc" },
-  });
+  const [fields, focuses, activeQuestion] = await Promise.all([
+    prisma.observationFieldDefinition.findMany({
+      where: { wishId },
+      orderBy: { sortOrder: "asc" },
+    }),
+    prisma.questionObservationFocus.findMany({
+      where: {
+        question: {
+          wishId,
+        },
+      },
+      include: {
+        question: {
+          select: {
+            id: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: [
+        { question: { createdAt: "desc" } },
+        { sortOrder: "asc" },
+      ],
+    }),
+    prisma.question.findFirst({
+      where: { wishId, status: "active" },
+      select: { id: true },
+    }),
+  ]);
+
+  const statsByFieldId = new Map<string, {
+    selectedCount: number;
+    presentedCount: number;
+    lastSelectedAt: string | null;
+    isCurrentlySelected: boolean;
+  }>();
+
+  for (const focus of focuses) {
+    const current = statsByFieldId.get(focus.fieldDefinitionId) || {
+      selectedCount: 0,
+      presentedCount: 0,
+      lastSelectedAt: null,
+      isCurrentlySelected: false,
+    };
+
+    current.presentedCount += 1;
+
+    if (focus.isSelected) {
+      current.selectedCount += 1;
+
+      if (!current.lastSelectedAt) {
+        current.lastSelectedAt = focus.question.createdAt.toISOString();
+      }
+
+      if (activeQuestion && focus.questionId === activeQuestion.id) {
+        current.isCurrentlySelected = true;
+      }
+    }
+
+    statsByFieldId.set(focus.fieldDefinitionId, current);
+  }
 
   return fields.map((field) => ({
     id: field.id,
@@ -268,6 +344,10 @@ async function listWishObservationFieldDefinitions(wishId: string): Promise<Exis
     isDefault: field.isDefault,
     sortOrder: field.sortOrder,
     derivedFromFieldId: field.derivedFromFieldId,
+    selectedCount: statsByFieldId.get(field.id)?.selectedCount || 0,
+    presentedCount: statsByFieldId.get(field.id)?.presentedCount || 0,
+    lastSelectedAt: statsByFieldId.get(field.id)?.lastSelectedAt || null,
+    isCurrentlySelected: statsByFieldId.get(field.id)?.isCurrentlySelected || false,
   }));
 }
 
@@ -275,7 +355,7 @@ export async function buildObservationFieldInputs(
   questionText: string,
   purposeFocus: string,
   context: FieldContext = {},
-  existingFields: FieldDefinitionInput[] = [],
+  existingFields: ExistingFieldLike[] = [],
 ): Promise<ObservationFieldCandidateResult> {
   const result = await generateRecordFieldSuggestions({
     question_text: questionText,
@@ -289,8 +369,16 @@ export async function buildObservationFieldInputs(
     existing_fields: existingFields.map((field) => ({
       key: field.key,
       label: field.label,
+      type: field.type,
+      unit: field.unit || null,
+      options: field.options || [],
       role: field.role || "core",
       why: field.why || "",
+      how_to_use: field.howToUse || "",
+      selected_count: field.selectedCount || 0,
+      presented_count: field.presentedCount || 0,
+      is_currently_selected: Boolean(field.isCurrentlySelected),
+      last_selected_at: field.lastSelectedAt || null,
     })),
   });
 
@@ -311,9 +399,17 @@ export async function buildObservationFieldInputs(
     : [];
 
   if (existingInputs.length > 0 || suggestedInputs.length > 0) {
+    const prioritizedKeys = prioritizeExistingFieldKeys(existingFields);
+    const selectedExistingKeys = Array.from(
+      new Set([
+        ...result.selected_existing_keys.filter((key) => prioritizedKeys.includes(key)),
+        ...prioritizedKeys,
+      ]),
+    ).slice(0, 6);
+
     return {
       fields: [...existingInputs, ...suggestedInputs],
-      selectedExistingKeys: result.selected_existing_keys || [],
+      selectedExistingKeys,
       splitExistingKeys: result.split_existing_keys || [],
     };
   }
@@ -397,6 +493,46 @@ export async function upsertObservationFieldDefinitions(
   return result;
 }
 
+export async function pruneNeverSelectedObservationFields(
+  tx: Prisma.TransactionClient,
+  wishId: string,
+  keepKeys: string[] = [],
+) {
+  const definitions = await tx.observationFieldDefinition.findMany({
+    where: { wishId },
+    select: {
+      id: true,
+      key: true,
+      derivedFromFieldId: true,
+      questionFocuses: {
+        select: {
+          isSelected: true,
+        },
+      },
+    },
+  });
+
+  const keepKeySet = new Set(keepKeys);
+  const removableIds = new Set(
+    definitions
+      .filter((field) => !keepKeySet.has(field.key))
+      .filter((field) => field.questionFocuses.every((focus) => !focus.isSelected))
+      .map((field) => field.id),
+  );
+
+  if (removableIds.size === 0) {
+    return;
+  }
+
+  await tx.observationFieldDefinition.deleteMany({
+    where: {
+      id: {
+        in: Array.from(removableIds),
+      },
+    },
+  });
+}
+
 export async function createQuestionObservationFocuses(
   tx: Prisma.TransactionClient,
   questionId: string,
@@ -410,6 +546,38 @@ export async function createQuestionObservationFocuses(
           questionId,
           fieldDefinitionId: field.id,
           isSelected: selectedKeys ? selectedKeys.includes(field.key || "") : true,
+          sortOrder: index,
+        },
+      }),
+    ),
+  );
+}
+
+export async function syncQuestionObservationFocuses(
+  tx: Prisma.TransactionClient,
+  questionId: string,
+  fields: Array<{ id: string; key: string }>,
+  selectedKeys: string[],
+) {
+  const selectedKeySet = new Set(selectedKeys);
+
+  return Promise.all(
+    fields.map((field, index) =>
+      tx.questionObservationFocus.upsert({
+        where: {
+          questionId_fieldDefinitionId: {
+            questionId,
+            fieldDefinitionId: field.id,
+          },
+        },
+        update: {
+          isSelected: selectedKeySet.has(field.key),
+          sortOrder: index,
+        },
+        create: {
+          questionId,
+          fieldDefinitionId: field.id,
+          isSelected: selectedKeySet.has(field.key),
           sortOrder: index,
         },
       }),
