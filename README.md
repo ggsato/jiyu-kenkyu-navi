@@ -11,6 +11,8 @@
   - `docs/philosophy/jiyu-kenkyu-navi.md`
 - 現行仕様の正本
   - `docs/product/mvp-design.md`
+- 現行仕様の補助図
+  - `docs/product/diagrams.md`
 - 採用済み判断
   - `docs/product/adopted-decisions.md`
 - 壊してはいけないこと
