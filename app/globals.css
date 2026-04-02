@@ -23,6 +23,10 @@ body {
   font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 input,
 textarea,
 select {

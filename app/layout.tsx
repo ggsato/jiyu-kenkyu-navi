@@ -13,7 +13,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="ja">
       <body>
         <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
+          <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
             <Link href="/" className="text-lg font-bold text-slate-900">
               自由研究ナビ
             </Link>

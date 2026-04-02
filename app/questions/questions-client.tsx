@@ -136,6 +136,18 @@ function candidateShapeMeta(shapeLabel: string) {
   };
 }
 
+function helperTone(type: "example" | "meaning" | "tip") {
+  if (type === "example") {
+    return "bg-sky-50 text-sky-950";
+  }
+
+  if (type === "meaning") {
+    return "bg-emerald-50 text-emerald-950";
+  }
+
+  return "bg-amber-50 text-amber-950";
+}
+
 function getDefaultSelectedFieldKeys(fields: FieldCandidate[], preferredKeys: string[] = []) {
   const preferred = preferredKeys.filter((key) => fields.some((field) => field.key === key));
 
@@ -340,6 +352,27 @@ export function QuestionsClient({
       return {};
     }
   });
+  const [splitStatusByParent, setSplitStatusByParent] = useState<Record<string, { type: "idle" | "loading" | "error" | "empty"; message: string }>>(() => {
+    if (typeof window === "undefined") {
+      return {};
+    }
+
+    const saved = window.sessionStorage.getItem(fieldConfigStorageKey(initialMode));
+
+    if (!saved) {
+      return {};
+    }
+
+    try {
+      const parsed = JSON.parse(saved) as {
+        splitStatusByParent?: Record<string, { type: "idle" | "loading" | "error" | "empty"; message: string }>;
+      };
+      return parsed.splitStatusByParent || {};
+    } catch {
+      window.sessionStorage.removeItem(fieldConfigStorageKey(initialMode));
+      return {};
+    }
+  });
   const [loadingSplitParentKey, setLoadingSplitParentKey] = useState("");
   const [isGenerating, startGenerating] = useTransition();
   const [isLoadingFields, startLoadingFields] = useTransition();
@@ -370,8 +403,8 @@ export function QuestionsClient({
   }, [candidates, mode]);
 
   useEffect(() => {
-    window.sessionStorage.setItem(fieldConfigStorageKey(mode), JSON.stringify({ fieldCandidates, selectedFieldKeys, splitSuggestedKeys, splitCandidatesByParent }));
-  }, [fieldCandidates, selectedFieldKeys, splitSuggestedKeys, splitCandidatesByParent, mode]);
+    window.sessionStorage.setItem(fieldConfigStorageKey(mode), JSON.stringify({ fieldCandidates, selectedFieldKeys, splitSuggestedKeys, splitCandidatesByParent, splitStatusByParent }));
+  }, [fieldCandidates, selectedFieldKeys, splitSuggestedKeys, splitCandidatesByParent, splitStatusByParent, mode]);
 
   useEffect(() => {
     if (candidates.length > 0 && previousCandidateCountRef.current === 0) {
@@ -424,6 +457,7 @@ export function QuestionsClient({
     setSelectedFieldKeys([]);
     setSplitSuggestedKeys([]);
     setSplitCandidatesByParent({});
+    setSplitStatusByParent({});
     setLoadingSplitParentKey("");
     setIsAddingCustomField(false);
     setCustomFieldError("");
@@ -484,23 +518,27 @@ export function QuestionsClient({
           selectedFieldKeys?: string[];
           splitSuggestedKeys?: string[];
           splitCandidatesByParent?: Record<string, FieldCandidate[]>;
+          splitStatusByParent?: Record<string, { type: "idle" | "loading" | "error" | "empty"; message: string }>;
         };
         setFieldCandidates(parsed.fieldCandidates || []);
         setSelectedFieldKeys(parsed.selectedFieldKeys || []);
         setSplitSuggestedKeys(parsed.splitSuggestedKeys || []);
         setSplitCandidatesByParent(parsed.splitCandidatesByParent || {});
+        setSplitStatusByParent(parsed.splitStatusByParent || {});
       } catch {
         window.sessionStorage.removeItem(fieldConfigStorageKey(nextMode));
         setFieldCandidates([]);
         setSelectedFieldKeys([]);
         setSplitSuggestedKeys([]);
         setSplitCandidatesByParent({});
+        setSplitStatusByParent({});
       }
     } else {
       setFieldCandidates([]);
       setSelectedFieldKeys([]);
       setSplitSuggestedKeys([]);
       setSplitCandidatesByParent({});
+      setSplitStatusByParent({});
     }
   }
 
@@ -662,6 +700,13 @@ export function QuestionsClient({
       return;
     }
 
+    setSplitStatusByParent((current) => ({
+      ...current,
+      [field.key]: {
+        type: "loading",
+        message: "AI がこの項目の細分化候補を考えています...",
+      },
+    }));
     setLoadingSplitParentKey(field.key);
 
     void fetch("/api/ai/record-fields/split-suggest", {
@@ -682,6 +727,44 @@ export function QuestionsClient({
       .then(async (response) => {
         const data = (await response.json()) as SplitFieldSuggestionsResponse;
         const nextCandidates = Array.isArray(data.split_candidates) ? data.split_candidates : [];
+
+        if (!response.ok || data.error) {
+          setSplitCandidatesByParent((current) => ({
+            ...current,
+            [field.key]: [],
+          }));
+          setSplitStatusByParent((current) => ({
+            ...current,
+            [field.key]: {
+              type: "error",
+              message: data.error || "細分化候補を作れませんでした。もう一度試してください。",
+            },
+          }));
+          return;
+        }
+
+        if (nextCandidates.length === 0) {
+          setSplitCandidatesByParent((current) => ({
+            ...current,
+            [field.key]: [],
+          }));
+          setSplitStatusByParent((current) => ({
+            ...current,
+            [field.key]: {
+              type: "empty",
+              message: "今回は細分化候補が見つかりませんでした。必要ならもう一度試せます。",
+            },
+          }));
+          return;
+        }
+
+        setSplitStatusByParent((current) => ({
+          ...current,
+          [field.key]: {
+            type: "idle",
+            message: "",
+          },
+        }));
         setSplitCandidatesByParent((current) => ({
           ...current,
           [field.key]: nextCandidates,
@@ -691,6 +774,13 @@ export function QuestionsClient({
         setSplitCandidatesByParent((current) => ({
           ...current,
           [field.key]: [],
+        }));
+        setSplitStatusByParent((current) => ({
+          ...current,
+          [field.key]: {
+            type: "error",
+            message: "細分化候補を作れませんでした。もう一度試してください。",
+          },
         }));
       })
       .finally(() => {
@@ -760,6 +850,21 @@ export function QuestionsClient({
   };
   const selectedFields = fieldCandidates.filter((field) => selectedFieldKeys.includes(field.key));
   const inactiveFields = fieldCandidates.filter((field) => !selectedFieldKeys.includes(field.key));
+  const activeStep = isSaving || selectedFieldKeys.length > 0
+    ? 5
+    : isLoadingFields || form.question_text
+      ? 4
+      : isGenerating || candidates.length > 0
+        ? 3
+        : 2;
+  const stepItems = [
+    { number: 1, title: "始め方", href: "#question-step-1" },
+    { number: 2, title: "願いの整理", href: "#question-step-2" },
+    { number: 3, title: "問い候補", href: "#question-step-3" },
+    { number: 4, title: "問い選択", href: "#question-step-4" },
+    { number: 5, title: "項目調整", href: "#question-step-5" },
+    { number: 6, title: "開始", href: "#question-step-6" },
+  ] as const;
 
   function renderFieldCard(field: FieldCandidate) {
     const selected = selectedFieldKeys.includes(field.key);
@@ -767,6 +872,7 @@ export function QuestionsClient({
     const splitChildCandidates = fieldCandidates.filter((candidate) => candidate.derived_from_key === field.key);
     const splitSuggestions = splitCandidatesByParent[field.key] || [];
     const isLoadingSplitSuggestions = loadingSplitParentKey === field.key;
+    const splitStatus = splitStatusByParent[field.key];
 
     return (
       <div
@@ -810,8 +916,9 @@ export function QuestionsClient({
             type="button"
             className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700"
             onClick={() => startSplitField(field)}
+            disabled={isLoadingSplitSuggestions}
           >
-            この項目を細かく分ける
+            {isLoadingSplitSuggestions ? "細分化候補を考え中..." : "この項目を細かく分ける"}
           </button>
           {splitChildCandidates.length > 0 ? (
             <span className="rounded-full bg-white px-3 py-1 text-xs text-amber-800">
@@ -819,8 +926,18 @@ export function QuestionsClient({
             </span>
           ) : null}
         </div>
-        {isLoadingSplitSuggestions ? (
-          <p className="mt-3 text-xs text-slate-500">AI がこの項目の子項目候補を考えています...</p>
+        {splitStatus && splitStatus.type !== "idle" ? (
+          <p
+            className={`mt-3 rounded-2xl px-3 py-2 text-xs ${
+              splitStatus.type === "error"
+                ? "bg-red-50 text-red-700"
+                : splitStatus.type === "empty"
+                  ? "bg-slate-50 text-slate-600"
+                  : "bg-slate-50 text-slate-500"
+            }`}
+          >
+            {splitStatus.message}
+          </p>
         ) : null}
         {splitSuggestions.length > 0 ? (
           <div className="mt-3 space-y-2">
@@ -858,6 +975,36 @@ export function QuestionsClient({
       </Card>
 
       <Card className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <SectionTitle>進み方</SectionTitle>
+          <Pill>今は {stepItems.find((step) => step.number === activeStep)?.title}</Pill>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+          {stepItems.map((step) => {
+            const state = step.number < activeStep ? "done" : step.number === activeStep ? "current" : "upcoming";
+
+            return (
+              <a
+                key={step.number}
+                href={step.href}
+                className={`rounded-2xl border px-3 py-3 text-left ${
+                  state === "current"
+                    ? "border-amber-400 bg-amber-50"
+                    : state === "done"
+                      ? "border-emerald-200 bg-emerald-50"
+                      : "border-slate-200 bg-white"
+                }`}
+              >
+                <p className="text-xs font-medium text-slate-500">STEP {step.number}</p>
+                <p className="mt-1 text-sm font-medium text-slate-900">{step.title}</p>
+              </a>
+            );
+          })}
+        </div>
+        <p className="text-xs text-slate-600">いま見たい場所へ戻れます。下まで進んでも、上の入力をあとで直してかまいません。</p>
+      </Card>
+
+      <Card id="question-step-1" className="space-y-3 scroll-mt-24">
         <div className="flex items-center justify-between">
           <SectionTitle>1. どこから始めるか</SectionTitle>
           <Pill>{mode === "continue" ? "今の願いを続ける" : "別の願いを始める"}</Pill>
@@ -921,7 +1068,7 @@ export function QuestionsClient({
         </Card>
       ) : null}
 
-      <Card className="space-y-4">
+      <Card id="question-step-2" className="space-y-4 scroll-mt-24">
         <div className="flex items-center justify-between">
           <SectionTitle>2. 願いの今を整理する</SectionTitle>
           <Pill>{mode === "continue" ? "引き継ぎあり" : "新しく書く"}</Pill>
@@ -929,39 +1076,48 @@ export function QuestionsClient({
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="field-label">何を願っているか</label>
+            <p className={`mb-2 rounded-2xl px-3 py-2 text-xs ${helperTone("meaning")}`}>何をできるようにしたいか、何を知りたいかを一文で置きます。</p>
             <textarea maxLength={INPUT_LIMITS.wish_text} rows={3} value={form.wish_text} onChange={(event) => updateField("wish_text", event.target.value)} />
+            <p className={`mt-2 rounded-2xl px-3 py-2 text-xs ${helperTone("example")}`}>例: サッカーで最後まで走り切れるようになりたい</p>
             <p className="mt-1 text-xs text-slate-500">{limitLabel(form.wish_text.length, INPUT_LIMITS.wish_text)}</p>
           </div>
           <div>
             <label className="field-label">なぜそう願うのか</label>
+            <p className={`mb-2 rounded-2xl px-3 py-2 text-xs ${helperTone("meaning")}`}>その願いが大事な理由を書くと、問いが自分の言葉から離れにくくなります。</p>
             <textarea maxLength={INPUT_LIMITS.reason} rows={3} value={form.reason} onChange={(event) => updateField("reason", event.target.value)} />
+            <p className={`mt-2 rounded-2xl px-3 py-2 text-xs ${helperTone("example")}`}>例: 試合の後半になると急に動けなくなるから</p>
             <p className="mt-1 text-xs text-slate-500">{limitLabel(form.reason.length, INPUT_LIMITS.reason)}</p>
           </div>
           <div>
             <label className="field-label">今できていること</label>
+            <p className={`mb-2 rounded-2xl px-3 py-2 text-xs ${helperTone("tip")}`}>少しでもできていることを書くと、問いを小さくしやすくなります。</p>
             <textarea maxLength={INPUT_LIMITS.current_state} rows={3} value={form.current_state} onChange={(event) => updateField("current_state", event.target.value)} />
             <p className="mt-1 text-xs text-slate-500">{limitLabel(form.current_state.length, INPUT_LIMITS.current_state)}</p>
           </div>
           <div>
             <label className="field-label">まだできていないこと</label>
+            <p className={`mb-2 rounded-2xl px-3 py-2 text-xs ${helperTone("tip")}`}>できていないことをそのまま書くと、比べる問いや観測項目につながります。</p>
             <textarea maxLength={INPUT_LIMITS.not_yet} rows={3} value={form.not_yet} onChange={(event) => updateField("not_yet", event.target.value)} />
             <p className="mt-1 text-xs text-slate-500">{limitLabel(form.not_yet.length, INPUT_LIMITS.not_yet)}</p>
           </div>
           <div className="md:col-span-2">
             <label className="field-label">できるようになりたいこと</label>
+            <p className={`mb-2 rounded-2xl px-3 py-2 text-xs ${helperTone("meaning")}`}>問いの向かう先です。今の課題より少し先の状態を書くと十分です。</p>
             <textarea maxLength={INPUT_LIMITS.desired_state} rows={3} value={form.desired_state} onChange={(event) => updateField("desired_state", event.target.value)} />
             <p className="mt-1 text-xs text-slate-500">{limitLabel(form.desired_state.length, INPUT_LIMITS.desired_state)}</p>
           </div>
           <div className="md:col-span-2">
             <label className="field-label">今いちばん気になること</label>
             <textarea maxLength={INPUT_LIMITS.next_curiosity_text} rows={3} value={form.next_curiosity_text} onChange={(event) => updateField("next_curiosity_text", event.target.value)} />
-            <p className="mt-2 text-xs text-slate-500">次に見たいことや、たしかめたいことがあれば書く</p>
+            <p className={`mt-2 rounded-2xl px-3 py-2 text-xs ${helperTone("example")}`}>例: 後半に止まりたくなる前に、どんな場面が来ているんだろう</p>
             <p className="mt-1 text-xs text-slate-500">{limitLabel(form.next_curiosity_text.length, INPUT_LIMITS.next_curiosity_text)}</p>
           </div>
         </div>
-        <button type="button" className="btn-primary w-full md:w-auto" onClick={generateCandidates} disabled={isGenerating}>
+        <div id="question-step-3" className="scroll-mt-24">
+          <button type="button" className="btn-primary w-full md:w-auto" onClick={generateCandidates} disabled={isGenerating}>
           {isGenerating ? "問いを考え中..." : "3. 問い候補を出す"}
-        </button>
+          </button>
+        </div>
         {isGenerating ? (
           <LoadingBlock
             title="問い候補を整えています"
@@ -971,9 +1127,10 @@ export function QuestionsClient({
       </Card>
 
       <Card
+        id="question-step-4"
         className={`space-y-4 transition ${highlightedSection === "candidates" ? "ring-2 ring-amber-300 ring-offset-2 ring-offset-[var(--bg)]" : ""}`}
       >
-        <section ref={candidatesSectionRef} className="space-y-4">
+        <section ref={candidatesSectionRef} className="space-y-4 scroll-mt-24">
         <div className="flex items-center justify-between">
           <SectionTitle>4. 問いを1つ選ぶ</SectionTitle>
           {form.question_text ? <Pill>{getPrimaryPurposeFocusOption(form.purpose_focus).label}</Pill> : null}
@@ -1017,9 +1174,10 @@ export function QuestionsClient({
       </Card>
 
       <Card
+        id="question-step-5"
         className={`space-y-4 transition ${highlightedSection === "fields" ? "ring-2 ring-amber-300 ring-offset-2 ring-offset-[var(--bg)]" : ""}`}
       >
-        <section ref={fieldsSectionRef} className="space-y-4">
+        <section ref={fieldsSectionRef} className="space-y-4 scroll-mt-24">
         <div className="flex items-center justify-between">
           <SectionTitle>5. 見る項目を整える</SectionTitle>
           {selectedFieldKeys.length > 0 ? <Pill>{selectedFieldKeys.length}項目を選択中</Pill> : null}
@@ -1199,8 +1357,9 @@ export function QuestionsClient({
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
         <button
+          id="question-step-6"
           type="button"
-          className="btn-primary w-full"
+          className="btn-primary w-full scroll-mt-24"
           onClick={saveQuestion}
           disabled={isSaving || !form.question_text || selectedFieldKeys.length === 0}
         >
