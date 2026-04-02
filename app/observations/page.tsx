@@ -93,9 +93,9 @@ export default async function ObservationsPage() {
     return (
       <PageShell>
         <Card className="bg-[linear-gradient(135deg,#fff7d6,#ffffff)]">
-          <p className="mb-3 text-sm text-slate-600">観測骨格</p>
-          <h1 className="text-3xl font-bold text-slate-900">まだ観測骨格はありません</h1>
-          <p className="mt-3 max-w-2xl text-slate-700">最初の問いを作ると、この願いで見ていく項目の構造がここにたまっていきます。</p>
+          <p className="mb-3 text-sm text-slate-600">見方の地図</p>
+          <h1 className="text-3xl font-bold text-slate-900">まだ見方の地図はありません</h1>
+          <p className="mt-3 max-w-2xl text-slate-700">最初の問いを作ると、この願いで見ていく項目のまとまりがここにたまっていきます。</p>
           <div className="mt-6 flex gap-3">
             <Link href="/questions" className="btn-primary">
               問いを作る
@@ -112,7 +112,7 @@ export default async function ObservationsPage() {
   return (
     <PageShell>
       <Card className="bg-[linear-gradient(135deg,#fff7d6,#ffffff)]">
-        <p className="mb-3 text-sm text-slate-600">観測骨格</p>
+        <p className="mb-3 text-sm text-slate-600">見方の地図</p>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-3xl">
             <h1 className="text-3xl font-bold text-slate-900">この願いの見方の地図</h1>
@@ -165,7 +165,7 @@ export default async function ObservationsPage() {
           </div>
         </Card>
         <Card>
-          <SectionTitle>今は休んでいる項目</SectionTitle>
+          <SectionTitle>今はお休みしている項目</SectionTitle>
           <div className="mt-3 flex flex-wrap gap-2">
             {payload.resting.length > 0 ? (
               payload.resting.map((label) => (
@@ -174,7 +174,7 @@ export default async function ObservationsPage() {
                 </span>
               ))
             ) : (
-              <p className="text-sm text-slate-600">今は休んでいる項目はありません。</p>
+              <p className="text-sm text-slate-600">今はお休みしている項目はありません。</p>
             )}
           </div>
         </Card>
@@ -182,10 +182,10 @@ export default async function ObservationsPage() {
 
       <Card>
         <div className="flex items-center justify-between gap-3">
-          <SectionTitle>親子関係</SectionTitle>
-          <Pill>願いにひもづく観測骨格</Pill>
+          <SectionTitle>つながり</SectionTitle>
+          <Pill>この願いで見ていく項目</Pill>
         </div>
-        <p className="mt-3 text-sm text-slate-600">親項目から子項目への細分化をたどれます。今の問いで使う項目は強調表示されます。</p>
+        <p className="mt-3 text-sm text-slate-600">大きい項目から細かい項目へのつながりをたどれます。今の問いで使う項目は強調表示されます。</p>
         <div className="mt-4">
           <ObservationTree nodes={payload.tree} />
         </div>

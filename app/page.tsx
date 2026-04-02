@@ -21,7 +21,7 @@ export default async function HomePage({
       <PageShell>
         <UserSwitcher users={users} currentUserId={currentUserId} />
         <Card className="bg-[linear-gradient(135deg,#fff7d6,#ffffff)]">
-          <p className="mb-3 text-sm text-slate-600">今どこにいるか</p>
+          <p className="mb-3 text-sm text-slate-600">今の状態</p>
           <h1 className="text-3xl font-bold text-slate-900">最初の問いを作ろう</h1>
           <p className="mt-3 max-w-2xl text-slate-700">願いを書いて、何を見ていくかを決める小さな問いを1つ選ぶところから始めます。</p>
           <Link href="/questions" className="btn-primary mt-6">
@@ -83,13 +83,13 @@ export default async function HomePage({
           <SectionTitle>今何をしているか</SectionTitle>
           <p className="mt-3 text-sm text-slate-600">最近の記録件数</p>
           <p className="mt-1 text-4xl font-bold">{home.record_count}</p>
-          <p className="mt-3 text-sm text-slate-600">前進のたまり</p>
+          <p className="mt-3 text-sm text-slate-600">ここまでたまったこと</p>
           <p className="mt-1 text-2xl font-semibold">{home.total_distance}</p>
         </Card>
         <Card className="md:col-span-2">
-          <SectionTitle>最近のようす</SectionTitle>
+          <SectionTitle>ここまでのようす</SectionTitle>
           <p className="mt-3 text-slate-700">{home.trajectory_summary}</p>
-          {home.recent_reflection_summary ? <p className="mt-3 text-sm text-slate-500">最近わかったこと: {home.recent_reflection_summary}</p> : null}
+          {home.recent_reflection_summary ? <p className="mt-3 text-sm text-slate-500">この前の気づき: {home.recent_reflection_summary}</p> : null}
         </Card>
       </div>
 
@@ -98,7 +98,7 @@ export default async function HomePage({
           <div className="flex items-center justify-between gap-3">
             <SectionTitle>今見ている項目</SectionTitle>
             <Link href="/observations" className="text-sm font-medium text-amber-900 underline-offset-2 hover:underline">
-              構造を見る
+              見方の地図を見る
             </Link>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -114,7 +114,7 @@ export default async function HomePage({
           </div>
         </Card>
         <Card>
-          <SectionTitle>よく使う観測</SectionTitle>
+          <SectionTitle>よく見る項目</SectionTitle>
           <div className="mt-3 space-y-2">
             {home.observation_summary.frequent.length > 0 ? (
               home.observation_summary.frequent.map((item) => (
@@ -128,7 +128,7 @@ export default async function HomePage({
           </div>
         </Card>
         <Card>
-          <SectionTitle>休んでいる項目</SectionTitle>
+          <SectionTitle>今はお休みしている項目</SectionTitle>
           <div className="mt-3 space-y-2">
             {home.observation_summary.resting.length > 0 ? (
               home.observation_summary.resting.map((label) => (
@@ -137,11 +137,11 @@ export default async function HomePage({
                 </div>
               ))
             ) : (
-              <p className="text-sm text-slate-600">今は休んでいる項目はありません。</p>
+              <p className="text-sm text-slate-600">今はお休みしている項目はありません。</p>
             )}
           </div>
           {home.observation_summary.recentAdded.length > 0 ? (
-            <p className="mt-4 text-xs text-slate-500">最近増えた項目: {home.observation_summary.recentAdded.join(" / ")}</p>
+            <p className="mt-4 text-xs text-slate-500">最近ふえた項目: {home.observation_summary.recentAdded.join(" / ")}</p>
           ) : null}
         </Card>
       </div>
@@ -152,7 +152,7 @@ export default async function HomePage({
             <SectionTitle>次にするとよいこと</SectionTitle>
             <Pill>次の一歩</Pill>
           </div>
-          {params.from === "reflection" ? <p className="mt-3 text-sm font-medium text-amber-800">振り返りできたね。今の願いを続けるか、別の願いを始めるか決めよう。</p> : null}
+          {params.from === "reflection" ? <p className="mt-3 text-sm font-medium text-amber-800">振り返りで見えてきたことをもとに、今の願いを続けるか、別の願いを始めるか決めよう。</p> : null}
           <p className="mt-3 text-slate-700">{home.next_step_summary}</p>
           <div className="mt-5 flex gap-3">
             <Link href={`/records?source=next_step&questionId=${home.active_question_id}`} className="btn-primary">

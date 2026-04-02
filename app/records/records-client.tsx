@@ -206,7 +206,7 @@ export function RecordsClient({
           </p>
         </div>
         <div>
-          <label className="field-label">今回注目する観測項目</label>
+          <label className="field-label">今回よく見る項目</label>
           <div className="space-y-3">
             {fieldDefinitions.map((field) => (
               <div key={field.id} className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -262,12 +262,12 @@ export function RecordsClient({
                 )}
               </div>
             ))}
-            {fieldDefinitions.length === 0 ? <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">この問いで使う観測項目はまだありません。</p> : null}
+            {fieldDefinitions.length === 0 ? <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">この問いで使う項目はまだありません。</p> : null}
           </div>
         </div>
         <div>
           <label className="field-label">メモ</label>
-          <p className="mb-2 text-xs text-slate-500">項目に入りにくい補足だけを短く残します。</p>
+          <p className="mb-2 text-xs text-slate-500">あとで見比べたり振り返ったりしやすいように、項目に入りにくい補足だけを短く残します。</p>
           <textarea maxLength={INPUT_LIMITS.record_memo} rows={3} value={memo} onChange={(event) => setMemo(event.target.value)} />
           <p className="mt-1 text-xs text-slate-500">{limitLabel(memo.length, INPUT_LIMITS.record_memo)}</p>
         </div>
