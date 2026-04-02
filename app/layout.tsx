@@ -1,6 +1,7 @@
 import "./globals.css";
 import Link from "next/link";
 import { ReactNode } from "react";
+import { NavLink } from "@/components/nav-link";
 
 export const metadata = {
   title: "自由研究ナビ",
@@ -16,22 +17,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Link href="/" className="text-lg font-bold text-slate-900">
               自由研究ナビ
             </Link>
-            <nav className="flex gap-2 text-sm text-slate-700">
-              <Link href="/" className="rounded-full px-3 py-2 hover:bg-slate-100">
-                ホーム
-              </Link>
-              <Link href="/questions" className="rounded-full px-3 py-2 hover:bg-slate-100">
-                問い作成
-              </Link>
-              <Link href="/records" className="rounded-full px-3 py-2 hover:bg-slate-100">
-                記録
-              </Link>
-              <Link href="/reflection" className="rounded-full px-3 py-2 hover:bg-slate-100">
-                振り返り
-              </Link>
-              <Link href="/family" className="rounded-full px-3 py-2 hover:bg-slate-100">
-                家族設定
-              </Link>
+            <nav className="flex flex-wrap gap-2 text-sm">
+              <NavLink href="/">ホーム</NavLink>
+              <NavLink href="/questions">問い作成</NavLink>
+              <NavLink href="/records">記録</NavLink>
+              <NavLink href="/reflection">振り返り</NavLink>
+              <NavLink href="/family">家族設定</NavLink>
             </nav>
           </div>
         </header>
