@@ -185,10 +185,46 @@ classDiagram
     Question "1" --> "0..*" Reflection : reviewed by day
     Question "1" --> "0..*" QuestionObservationFocus : focuses
     ObservationFieldDefinition "1" --> "0..*" QuestionObservationFocus : selected in
-    ObservationFieldDefinition "0..1" --> "0..*" ObservationFieldDefinition : derived into
 ```
 
-## 4. C4 風の概要図
+## 4. ObservationFieldDefinition の細分化表現案
+
+`ObservationFieldDefinition` の親子関係は、GitHub 上の `classDiagram` では自己関連の描画が崩れることがある。  
+そのため、自己関連を強調したい場合は次の代替表現を使う。
+
+### 4.1 flowchart で表す案
+
+```mermaid
+flowchart TD
+    parent[親項目<br/>ObservationFieldDefinition]
+    child1[細分化項目 A<br/>ObservationFieldDefinition]
+    child2[細分化項目 B<br/>ObservationFieldDefinition]
+
+    parent -->|derived into| child1
+    parent -->|derived into| child2
+```
+
+### 4.2 erDiagram で表す案
+
+```mermaid
+erDiagram
+    OBSERVATION_FIELD_DEFINITION ||--o{ OBSERVATION_FIELD_DERIVATION : parent
+    OBSERVATION_FIELD_DEFINITION ||--o{ OBSERVATION_FIELD_DERIVATION : child
+
+    OBSERVATION_FIELD_DEFINITION {
+        string id
+        string key
+        string label
+        string type
+    }
+
+    OBSERVATION_FIELD_DERIVATION {
+        string parentFieldId
+        string childFieldId
+    }
+```
+
+## 5. C4 風の概要図
 
 ```mermaid
 flowchart TB
@@ -208,9 +244,10 @@ flowchart TB
     web -->|問い候補・記録項目候補・ホーム要約の生成| ai
 ```
 
-## 5. 補足
+## 6. 補足
 
 - ユースケース図では、AI は問いや記録項目の作者ではなく、整える補助役として表現している
 - 画面責務図は画面遷移図ではなく、どの画面がどの責務を持つかを示す
 - クラス図は実装上の全属性一覧ではなく、現行仕様の理解に必要な中心構造へ絞っている
+- `ObservationFieldDefinition` の親子関係は GitHub 上の Mermaid 描画安定性を優先し、クラス図本体からは外して別図で補っている
 - C4 風の概要図は MVP の把握を優先した簡略版である
