@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
-import { Card, Pill, SectionTitle } from "@/components/ui";
+import { Card, LoadingBlock, Pill, SectionTitle } from "@/components/ui";
 import { ObservationFieldEditor, type EditableObservationField } from "@/components/observation-field-editor";
 import { INPUT_LIMITS, limitLabel } from "@/lib/input-limits";
 import { getPrimaryPurposeFocusOption, normalizePurposeFocus } from "@/lib/purpose-focus";
@@ -75,6 +75,9 @@ export function RecordsClient({
     ),
   );
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState("");
+  const [deletingId, setDeletingId] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const todayCount = useMemo(() => {
@@ -151,17 +154,18 @@ export function RecordsClient({
 
   async function submitRecord() {
     setError("");
+    setSuccessMessage("");
 
     startTransition(async () => {
-    const response = await fetch("/api/records", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        question_id: activeQuestionId,
-        recorded_at: new Date(recordedAt).toISOString(),
-        body: buildRecordBody(),
-        memo,
-        kv_fields: kvFields,
+      const response = await fetch("/api/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question_id: activeQuestionId,
+          recorded_at: new Date(recordedAt).toISOString(),
+          body: buildRecordBody(),
+          memo,
+          kv_fields: kvFields,
           tags: [],
           source,
         }),
@@ -201,7 +205,34 @@ export function RecordsClient({
           currentFieldDefinitions.map((field) => [field.key, field.type === "boolean" ? false : ""]),
         ),
       );
+      setSuccessMessage("記録を追加しました。");
     });
+  }
+
+  async function deleteRecord(recordId: string) {
+    setError("");
+    setSuccessMessage("");
+    setDeletingId(recordId);
+
+    try {
+      const response = await fetch(`/api/records/${recordId}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "記録を削除できませんでした");
+        return;
+      }
+
+      setItems((current) => current.filter((item) => item.id !== recordId));
+      setConfirmDeleteId("");
+      setSuccessMessage("記録を削除しました。");
+    } catch {
+      setError("記録を削除できませんでした");
+    } finally {
+      setDeletingId("");
+    }
   }
 
   return (
@@ -316,10 +347,17 @@ export function RecordsClient({
             </ul>
           ) : null}
         </div>
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        {error ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
+        {successMessage ? <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{successMessage}</p> : null}
         <button type="button" className="btn-primary w-full" onClick={submitRecord} disabled={isPending || !activeQuestionId}>
           {isPending ? "保存中..." : "記録する"}
         </button>
+        {isPending ? (
+          <LoadingBlock
+            title="記録を保存しています"
+            description="時間と観測項目を、この問いの流れに積み上げています。"
+          />
+        ) : null}
       </Card>
 
       <Card>
@@ -359,8 +397,20 @@ export function RecordsClient({
             <p className="text-slate-600">まだ記録はありません。</p>
           ) : (
             items.map((item) => (
-              <article key={item.id} className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-xs text-slate-500">{new Date(item.recordedAt).toLocaleString("ja-JP")}</p>
+              <article key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <p className="text-xs text-slate-500">{new Date(item.recordedAt).toLocaleString("ja-JP")}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700"
+                      onClick={() => setConfirmDeleteId((current) => (current === item.id ? "" : item.id))}
+                      disabled={deletingId === item.id}
+                    >
+                      {confirmDeleteId === item.id ? "削除確認を閉じる" : "削除"}
+                    </button>
+                  </div>
+                </div>
                 <p className="mt-2 font-medium text-slate-900">{item.body}</p>
                 {item.memo ? <p className="mt-2 text-sm text-slate-600">{item.memo}</p> : null}
                 {Object.keys(item.kvFields).length > 0 ? (
@@ -368,7 +418,7 @@ export function RecordsClient({
                     {Object.entries(item.kvFields).map(([key, value]) => {
                       const field = editableFieldDefinitions.find((definition) => definition.key === key);
                       return (
-                        <div key={key} className="grid grid-cols-[8rem_1fr] gap-2">
+                        <div key={key} className="grid grid-cols-1 gap-1 sm:grid-cols-[8rem_1fr] sm:gap-2">
                           <dt className="text-slate-500">{field?.label || key}</dt>
                           <dd>
                             <p>{String(value)}</p>
@@ -382,18 +432,42 @@ export function RecordsClient({
                 ) : null}
                 {item.tags.length > 0 ? <p className="mt-2 text-xs text-slate-500">タグ: {item.tags.join(", ")}</p> : null}
                 <div className="mt-3 flex flex-wrap gap-2">
-                {item.attachments.map((attachment) => (
-                  <a
-                    key={attachment.id}
-                    href={`/${attachment.storageKey.replace(/^public\//, "")}`}
-                    target="_blank"
-                    className="rounded-full bg-white px-3 py-1 text-xs text-slate-700"
-                    rel="noreferrer"
-                  >
+                  {item.attachments.map((attachment) => (
+                    <a
+                      key={attachment.id}
+                      href={`/${attachment.storageKey.replace(/^public\//, "")}`}
+                      target="_blank"
+                      className="rounded-full bg-white px-3 py-1 text-xs text-slate-700"
+                      rel="noreferrer"
+                    >
                       画像を開く
-                  </a>
-                ))}
-              </div>
+                    </a>
+                  ))}
+                </div>
+                {confirmDeleteId === item.id ? (
+                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+                    <p className="text-sm font-medium text-red-800">この記録を削除しますか？</p>
+                    <p className="mt-1 text-xs text-red-700">削除すると、この一覧から消えます。誤操作を防ぐため、もう一度確認しています。</p>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        className="inline-flex items-center justify-center rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-500"
+                        onClick={() => deleteRecord(item.id)}
+                        disabled={deletingId === item.id}
+                      >
+                        {deletingId === item.id ? "削除中..." : "削除する"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => setConfirmDeleteId("")}
+                        disabled={deletingId === item.id}
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </article>
             ))
           )}
