@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ComponentPropsWithoutRef, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export function PageShell({ children }: { children: ReactNode }) {
@@ -8,11 +8,12 @@ export function PageShell({ children }: { children: ReactNode }) {
 export function Card({
   children,
   className,
+  ...props
 }: {
   children: ReactNode;
   className?: string;
-}) {
-  return <section className={cn("rounded-3xl border border-slate-200 bg-white p-5 shadow-sm", className)}>{children}</section>;
+} & ComponentPropsWithoutRef<"section">) {
+  return <section className={cn("rounded-3xl border border-slate-200 bg-white p-5 shadow-sm", className)} {...props}>{children}</section>;
 }
 
 export function SectionTitle({ children }: { children: ReactNode }) {

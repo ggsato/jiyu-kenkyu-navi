@@ -115,6 +115,10 @@ function fieldTypeLabel(type: FieldCandidate["type"]) {
   return "短く書く";
 }
 
+function fieldShortHint(field: FieldCandidate) {
+  return field.why || "何を見るかを残しておくための項目です。";
+}
+
 function candidateShapeMeta(shapeLabel: string) {
   if (shapeLabel.includes("くらべ")) {
     return {
@@ -223,159 +227,13 @@ export function QuestionsClient({
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"continue" | "new">(initialMode);
-  const [form, setForm] = useState<QuestionFormState>(() => {
-    if (typeof window === "undefined") {
-      return initialMode === "continue" ? continueTemplate : newTemplate;
-    }
-
-    if (forceTemplate && initialMode === "continue") {
-      window.sessionStorage.setItem(formStorageKey("continue"), JSON.stringify(continueTemplate));
-      window.sessionStorage.removeItem(candidateStorageKey("continue"));
-      window.sessionStorage.removeItem(fieldConfigStorageKey("continue"));
-      return continueTemplate;
-    }
-
-    const saved = window.sessionStorage.getItem(formStorageKey(initialMode));
-
-    if (!saved) {
-      return initialMode === "continue" ? continueTemplate : newTemplate;
-    }
-
-    try {
-      const parsed = JSON.parse(saved) as QuestionFormState;
-
-      if (initialMode === "continue" && !isSameContinueWish(parsed, continueTemplate)) {
-        window.sessionStorage.removeItem(formStorageKey("continue"));
-        window.sessionStorage.removeItem(candidateStorageKey("continue"));
-        window.sessionStorage.removeItem(fieldConfigStorageKey("continue"));
-        return continueTemplate;
-      }
-
-      return parsed;
-    } catch {
-      window.sessionStorage.removeItem(formStorageKey(initialMode));
-      return initialMode === "continue" ? continueTemplate : newTemplate;
-    }
-  });
-  const [candidates, setCandidates] = useState<Candidate[]>(() => {
-    if (typeof window === "undefined") {
-      return [];
-    }
-
-    if (forceTemplate && initialMode === "continue") {
-      return [];
-    }
-
-    const saved = window.sessionStorage.getItem(candidateStorageKey(initialMode));
-
-    if (!saved) {
-      return [];
-    }
-
-    try {
-      return JSON.parse(saved) as Candidate[];
-    } catch {
-      window.sessionStorage.removeItem(candidateStorageKey(initialMode));
-      return [];
-    }
-  });
-  const [fieldCandidates, setFieldCandidates] = useState<FieldCandidate[]>(() => {
-    if (typeof window === "undefined") {
-      return [];
-    }
-
-    const saved = window.sessionStorage.getItem(fieldConfigStorageKey(initialMode));
-
-    if (!saved) {
-      return [];
-    }
-
-    try {
-      const parsed = JSON.parse(saved) as { fieldCandidates?: FieldCandidate[] };
-      return parsed.fieldCandidates || [];
-    } catch {
-      window.sessionStorage.removeItem(fieldConfigStorageKey(initialMode));
-      return [];
-    }
-  });
-  const [selectedFieldKeys, setSelectedFieldKeys] = useState<string[]>(() => {
-    if (typeof window === "undefined") {
-      return [];
-    }
-
-    const saved = window.sessionStorage.getItem(fieldConfigStorageKey(initialMode));
-
-    if (!saved) {
-      return [];
-    }
-
-    try {
-      const parsed = JSON.parse(saved) as { selectedFieldKeys?: string[] };
-      return parsed.selectedFieldKeys || [];
-    } catch {
-      window.sessionStorage.removeItem(fieldConfigStorageKey(initialMode));
-      return [];
-    }
-  });
-  const [splitSuggestedKeys, setSplitSuggestedKeys] = useState<string[]>(() => {
-    if (typeof window === "undefined") {
-      return [];
-    }
-
-    const saved = window.sessionStorage.getItem(fieldConfigStorageKey(initialMode));
-
-    if (!saved) {
-      return [];
-    }
-
-    try {
-      const parsed = JSON.parse(saved) as { splitSuggestedKeys?: string[] };
-      return parsed.splitSuggestedKeys || [];
-    } catch {
-      window.sessionStorage.removeItem(fieldConfigStorageKey(initialMode));
-      return [];
-    }
-  });
-  const [splitCandidatesByParent, setSplitCandidatesByParent] = useState<Record<string, FieldCandidate[]>>(() => {
-    if (typeof window === "undefined") {
-      return {};
-    }
-
-    const saved = window.sessionStorage.getItem(fieldConfigStorageKey(initialMode));
-
-    if (!saved) {
-      return {};
-    }
-
-    try {
-      const parsed = JSON.parse(saved) as { splitCandidatesByParent?: Record<string, FieldCandidate[]> };
-      return parsed.splitCandidatesByParent || {};
-    } catch {
-      window.sessionStorage.removeItem(fieldConfigStorageKey(initialMode));
-      return {};
-    }
-  });
-  const [splitStatusByParent, setSplitStatusByParent] = useState<Record<string, { type: "idle" | "loading" | "error" | "empty"; message: string }>>(() => {
-    if (typeof window === "undefined") {
-      return {};
-    }
-
-    const saved = window.sessionStorage.getItem(fieldConfigStorageKey(initialMode));
-
-    if (!saved) {
-      return {};
-    }
-
-    try {
-      const parsed = JSON.parse(saved) as {
-        splitStatusByParent?: Record<string, { type: "idle" | "loading" | "error" | "empty"; message: string }>;
-      };
-      return parsed.splitStatusByParent || {};
-    } catch {
-      window.sessionStorage.removeItem(fieldConfigStorageKey(initialMode));
-      return {};
-    }
-  });
+  const [form, setForm] = useState<QuestionFormState>(initialMode === "continue" ? continueTemplate : newTemplate);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [fieldCandidates, setFieldCandidates] = useState<FieldCandidate[]>([]);
+  const [selectedFieldKeys, setSelectedFieldKeys] = useState<string[]>([]);
+  const [splitSuggestedKeys, setSplitSuggestedKeys] = useState<string[]>([]);
+  const [splitCandidatesByParent, setSplitCandidatesByParent] = useState<Record<string, FieldCandidate[]>>({});
+  const [splitStatusByParent, setSplitStatusByParent] = useState<Record<string, { type: "idle" | "loading" | "error" | "empty"; message: string }>>({});
   const [loadingSplitParentKey, setLoadingSplitParentKey] = useState("");
   const [isGenerating, startGenerating] = useTransition();
   const [isLoadingFields, startLoadingFields] = useTransition();
@@ -392,22 +250,153 @@ export function QuestionsClient({
   });
   const [customFieldError, setCustomFieldError] = useState("");
   const [highlightedSection, setHighlightedSection] = useState<"candidates" | "fields" | "">("");
+  const [storageReady, setStorageReady] = useState(false);
   const candidatesSectionRef = useRef<HTMLElement | null>(null);
   const fieldsSectionRef = useRef<HTMLElement | null>(null);
   const previousCandidateCountRef = useRef(candidates.length);
   const previousFieldCountRef = useRef(fieldCandidates.length);
 
   useEffect(() => {
+    const defaultForm = initialMode === "continue" ? continueTemplate : newTemplate;
+    let cancelled = false;
+
+    const applyState = (next: {
+      form: QuestionFormState;
+      candidates: Candidate[];
+      fieldCandidates: FieldCandidate[];
+      selectedFieldKeys: string[];
+      splitSuggestedKeys: string[];
+      splitCandidatesByParent: Record<string, FieldCandidate[]>;
+      splitStatusByParent: Record<string, { type: "idle" | "loading" | "error" | "empty"; message: string }>;
+    }) => {
+      queueMicrotask(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setForm(next.form);
+        setCandidates(next.candidates);
+        setFieldCandidates(next.fieldCandidates);
+        setSelectedFieldKeys(next.selectedFieldKeys);
+        setSplitSuggestedKeys(next.splitSuggestedKeys);
+        setSplitCandidatesByParent(next.splitCandidatesByParent);
+        setSplitStatusByParent(next.splitStatusByParent);
+        setStorageReady(true);
+      });
+    };
+
+    if (forceTemplate && initialMode === "continue") {
+      window.sessionStorage.setItem(formStorageKey("continue"), JSON.stringify(continueTemplate));
+      window.sessionStorage.removeItem(candidateStorageKey("continue"));
+      window.sessionStorage.removeItem(fieldConfigStorageKey("continue"));
+      applyState({
+        form: continueTemplate,
+        candidates: [],
+        fieldCandidates: [],
+        selectedFieldKeys: [],
+        splitSuggestedKeys: [],
+        splitCandidatesByParent: {},
+        splitStatusByParent: {},
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const savedForm = window.sessionStorage.getItem(formStorageKey(initialMode));
+    const savedCandidates = window.sessionStorage.getItem(candidateStorageKey(initialMode));
+    const savedFieldConfig = window.sessionStorage.getItem(fieldConfigStorageKey(initialMode));
+    let nextForm = defaultForm;
+    let nextCandidates: Candidate[] = [];
+    let nextFieldCandidates: FieldCandidate[] = [];
+    let nextSelectedFieldKeys: string[] = [];
+    let nextSplitSuggestedKeys: string[] = [];
+    let nextSplitCandidatesByParent: Record<string, FieldCandidate[]> = {};
+    let nextSplitStatusByParent: Record<string, { type: "idle" | "loading" | "error" | "empty"; message: string }> = {};
+
+    if (savedForm) {
+      try {
+        const parsed = JSON.parse(savedForm) as QuestionFormState;
+
+        if (initialMode === "continue" && !isSameContinueWish(parsed, continueTemplate)) {
+          window.sessionStorage.removeItem(formStorageKey("continue"));
+          window.sessionStorage.removeItem(candidateStorageKey("continue"));
+          window.sessionStorage.removeItem(fieldConfigStorageKey("continue"));
+          nextForm = continueTemplate;
+        } else {
+          nextForm = parsed;
+        }
+      } catch {
+        window.sessionStorage.removeItem(formStorageKey(initialMode));
+        nextForm = defaultForm;
+      }
+    }
+
+    if (savedCandidates) {
+      try {
+        nextCandidates = JSON.parse(savedCandidates) as Candidate[];
+      } catch {
+        window.sessionStorage.removeItem(candidateStorageKey(initialMode));
+      }
+    }
+
+    if (savedFieldConfig) {
+      try {
+        const parsed = JSON.parse(savedFieldConfig) as {
+          fieldCandidates?: FieldCandidate[];
+          selectedFieldKeys?: string[];
+          splitSuggestedKeys?: string[];
+          splitCandidatesByParent?: Record<string, FieldCandidate[]>;
+          splitStatusByParent?: Record<string, { type: "idle" | "loading" | "error" | "empty"; message: string }>;
+        };
+        nextFieldCandidates = parsed.fieldCandidates || [];
+        nextSelectedFieldKeys = parsed.selectedFieldKeys || [];
+        nextSplitSuggestedKeys = parsed.splitSuggestedKeys || [];
+        nextSplitCandidatesByParent = parsed.splitCandidatesByParent || {};
+        nextSplitStatusByParent = parsed.splitStatusByParent || {};
+      } catch {
+        window.sessionStorage.removeItem(fieldConfigStorageKey(initialMode));
+      }
+    }
+
+    applyState({
+      form: nextForm,
+      candidates: nextCandidates,
+      fieldCandidates: nextFieldCandidates,
+      selectedFieldKeys: nextSelectedFieldKeys,
+      splitSuggestedKeys: nextSplitSuggestedKeys,
+      splitCandidatesByParent: nextSplitCandidatesByParent,
+      splitStatusByParent: nextSplitStatusByParent,
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [continueTemplate, forceTemplate, initialMode, newTemplate]);
+
+  useEffect(() => {
+    if (!storageReady) {
+      return;
+    }
+
     window.sessionStorage.setItem(formStorageKey(mode), JSON.stringify(form));
-  }, [form, mode]);
+  }, [form, mode, storageReady]);
 
   useEffect(() => {
+    if (!storageReady) {
+      return;
+    }
+
     window.sessionStorage.setItem(candidateStorageKey(mode), JSON.stringify(candidates));
-  }, [candidates, mode]);
+  }, [candidates, mode, storageReady]);
 
   useEffect(() => {
+    if (!storageReady) {
+      return;
+    }
+
     window.sessionStorage.setItem(fieldConfigStorageKey(mode), JSON.stringify({ fieldCandidates, selectedFieldKeys, splitSuggestedKeys, splitCandidatesByParent, splitStatusByParent }));
-  }, [fieldCandidates, selectedFieldKeys, splitSuggestedKeys, splitCandidatesByParent, splitStatusByParent, mode]);
+  }, [fieldCandidates, selectedFieldKeys, splitSuggestedKeys, splitCandidatesByParent, splitStatusByParent, mode, storageReady]);
 
   useEffect(() => {
     if (candidates.length > 0 && previousCandidateCountRef.current === 0) {
@@ -884,37 +873,61 @@ export function QuestionsClient({
           selected ? "border-amber-400 bg-amber-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"
         }`}
       >
-        <button type="button" className="w-full text-left" onClick={() => toggleFieldSelection(field.key)}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="font-medium text-slate-900">
-                {field.label}
-                {field.unit ? ` (${field.unit})` : ""}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">{fieldTypeLabel(field.type)}</p>
-            </div>
-            <div className="flex flex-wrap justify-end gap-2">
-              <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white">{meta.title}</span>
-              {field.is_default ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">初期選択</span> : null}
-              {field.is_custom ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">自分で追加</span> : null}
-              {splitSuggestedKeys.includes(field.key) ? <span className="rounded-full bg-white px-3 py-1 text-xs text-amber-800">細かく分ける候補</span> : null}
-              {field.derived_from_key ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">細分化項目</span> : null}
-              <span className={`rounded-full px-3 py-1 text-xs ${selected ? "bg-amber-200 text-amber-950" : "bg-slate-100 text-slate-700"}`}>{selected ? "今回使う" : "今回は休む"}</span>
-            </div>
-          </div>
-          <p className="mt-2 text-xs font-medium text-slate-700">{meta.description}</p>
-          <p className="mt-2 text-sm text-slate-600">{field.why || "この項目があると、あとで見比べやすくなります。"}</p>
-          {field.derived_from_key ? (
-            <p className="mt-2 text-xs text-amber-800">
-              細分化元: {fieldCandidates.find((candidate) => candidate.key === field.derived_from_key)?.label || field.derived_from_key}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-medium text-slate-900">
+              {field.label}
+              {field.unit ? ` (${field.unit})` : ""}
             </p>
-          ) : null}
-          {field.how_to_use ? <p className="mt-2 text-xs text-slate-500">使い方: {field.how_to_use}</p> : null}
-          {field.type === "select" && field.options.length > 0 ? (
-            <p className="mt-2 text-xs text-slate-500">例: {field.options.join(" / ")}</p>
-          ) : null}
-        </button>
+            <p className="mt-1 text-sm text-slate-600">{fieldShortHint(field)}</p>
+            <p className="mt-2 text-xs font-medium text-slate-700">{meta.description}</p>
+          </div>
+          <button
+            type="button"
+            className={`rounded-full px-4 py-2 text-sm font-medium ${
+              selected ? "bg-amber-200 text-amber-950" : "bg-slate-100 text-slate-700"
+            }`}
+            onClick={() => toggleFieldSelection(field.key)}
+          >
+            {selected ? "今回使う" : "今回は休む"}
+          </button>
+        </div>
         <div className="mt-3 flex flex-wrap gap-2">
+          <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white">{meta.title}</span>
+          <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">{fieldTypeLabel(field.type)}</span>
+          {field.is_default ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">AI初期提案</span> : null}
+          {field.is_custom ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">自分で追加</span> : null}
+          {splitSuggestedKeys.includes(field.key) ? <span className="rounded-full bg-white px-3 py-1 text-xs text-amber-800">細かく分ける候補</span> : null}
+          {field.derived_from_key ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">細分化項目</span> : null}
+        </div>
+        <details className="mt-3 rounded-2xl bg-white/80 p-3">
+          <summary className="cursor-pointer text-sm font-medium text-slate-800">少し直す / 詳細を見る</summary>
+          <div className="mt-3 space-y-3">
+            <div>
+              <label className="field-label">項目名</label>
+              <input
+                type="text"
+                value={field.label}
+                onChange={(event) =>
+                  setFieldCandidates((current) =>
+                    current.map((candidate) =>
+                      candidate.key === field.key ? { ...candidate, label: event.target.value } : candidate,
+                    ),
+                  )
+                }
+              />
+              <p className="mt-1 text-xs text-slate-500">主操作は選ぶことです。名前だけ少し直したいときに使います。</p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+              {field.derived_from_key ? (
+                <span>
+                  細分化元: {fieldCandidates.find((candidate) => candidate.key === field.derived_from_key)?.label || field.derived_from_key}
+                </span>
+              ) : null}
+              {field.how_to_use ? <span>使い方: {field.how_to_use}</span> : null}
+              {field.type === "select" && field.options.length > 0 ? <span>選択肢: {field.options.join(" / ")}</span> : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
           <button
             type="button"
             className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700"
@@ -923,12 +936,14 @@ export function QuestionsClient({
           >
             {isLoadingSplitSuggestions ? "細分化候補を考え中..." : "この項目を細かく分ける"}
           </button>
-          {splitChildCandidates.length > 0 ? (
-            <span className="rounded-full bg-white px-3 py-1 text-xs text-amber-800">
-              子項目候補: {splitChildCandidates.map((candidate) => candidate.label).join(" / ")}
-            </span>
-          ) : null}
-        </div>
+              {splitChildCandidates.length > 0 ? (
+                <span className="rounded-full bg-white px-3 py-1 text-xs text-amber-800">
+                  子項目候補: {splitChildCandidates.map((candidate) => candidate.label).join(" / ")}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </details>
         {splitStatus && splitStatus.type !== "idle" ? (
           <p
             className={`mt-3 rounded-2xl px-3 py-2 text-xs ${
@@ -1096,6 +1111,7 @@ export function QuestionsClient({
           <SectionTitle>2. 願いの今を整理する</SectionTitle>
           <Pill>{mode === "continue" ? "引き継ぎあり" : "新しく書く"}</Pill>
         </div>
+        <p className="text-sm text-slate-600">最初は少しだけ書けば進めます。くわしい背景は必要になったら開いて足せます。</p>
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label className="field-label">何を願っているか</label>
@@ -1105,6 +1121,16 @@ export function QuestionsClient({
             <p className="mt-1 text-xs text-slate-500">{limitLabel(form.wish_text.length, INPUT_LIMITS.wish_text)}</p>
           </div>
           <div>
+            <label className="field-label">今いちばん気になること</label>
+            <textarea maxLength={INPUT_LIMITS.next_curiosity_text} rows={3} value={form.next_curiosity_text} onChange={(event) => updateField("next_curiosity_text", event.target.value)} />
+            <p className={`mt-2 rounded-2xl px-3 py-2 text-xs ${helperTone("example")}`}>例: 後半に止まりたくなる前に、どんな場面が来ているんだろう</p>
+            <p className="mt-1 text-xs text-slate-500">{limitLabel(form.next_curiosity_text.length, INPUT_LIMITS.next_curiosity_text)}</p>
+          </div>
+        </div>
+        <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <summary className="cursor-pointer text-sm font-medium text-slate-900">もう少し話す / くわしく書く</summary>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
             <label className="field-label">なぜそう願うのか</label>
             <p className={`mb-2 rounded-2xl px-3 py-2 text-xs ${helperTone("meaning")}`}>その願いが大事な理由を書くと、問いが自分の言葉から離れにくくなります。</p>
             <textarea maxLength={INPUT_LIMITS.reason} rows={3} value={form.reason} onChange={(event) => updateField("reason", event.target.value)} />
@@ -1129,13 +1155,8 @@ export function QuestionsClient({
             <textarea maxLength={INPUT_LIMITS.desired_state} rows={3} value={form.desired_state} onChange={(event) => updateField("desired_state", event.target.value)} />
             <p className="mt-1 text-xs text-slate-500">{limitLabel(form.desired_state.length, INPUT_LIMITS.desired_state)}</p>
           </div>
-          <div className="md:col-span-2">
-            <label className="field-label">今いちばん気になること</label>
-            <textarea maxLength={INPUT_LIMITS.next_curiosity_text} rows={3} value={form.next_curiosity_text} onChange={(event) => updateField("next_curiosity_text", event.target.value)} />
-            <p className={`mt-2 rounded-2xl px-3 py-2 text-xs ${helperTone("example")}`}>例: 後半に止まりたくなる前に、どんな場面が来ているんだろう</p>
-            <p className="mt-1 text-xs text-slate-500">{limitLabel(form.next_curiosity_text.length, INPUT_LIMITS.next_curiosity_text)}</p>
           </div>
-        </div>
+        </details>
         <div id="question-step-3" className="scroll-mt-24">
           <button type="button" className="btn-primary w-full md:w-auto" onClick={generateCandidates} disabled={isGenerating}>
           {isGenerating ? "問いを考え中..." : "3. 問い候補を出す"}
@@ -1205,7 +1226,7 @@ export function QuestionsClient({
           <SectionTitle>5. 見る項目を整える</SectionTitle>
           {selectedFieldKeys.length > 0 ? <Pill>{selectedFieldKeys.length}項目を選択中</Pill> : null}
         </div>
-        <p className="text-sm text-slate-600">この願いを見る項目のうち、今回の問いで使うものを決めます。AI の初期選択をそのまま使ってもかまいません。</p>
+        <p className="text-sm text-slate-600">この願いを見る項目のうち、今回の問いで使うものを決めます。AI の初期提案をそのまま使ってもよく、必要なら少しだけ直せます。</p>
         {fieldCandidates.length > 0 ? (
           <div className="grid gap-3 md:grid-cols-3">
             {(["core", "compare", "optional"] as const).map((role) => {
