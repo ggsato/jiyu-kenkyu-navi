@@ -216,6 +216,9 @@ export function QuestionsClient({
     after_current_state: string;
     after_not_yet: string;
     after_desired_state: string;
+    latest_reflection_learned: string;
+    latest_reflection_unknown: string;
+    latest_reflection_next_step: string;
   } | null;
 }) {
   const router = useRouter();
@@ -1032,38 +1035,58 @@ export function QuestionsClient({
 
       {mode === "continue" && continueSummary ? (
         <Card className="space-y-4">
-          <SectionTitle>続きに入るときの引き継ぎ</SectionTitle>
-          <p className="text-sm text-slate-600">振り返りで書いた内容は、そのまま次の問い作りの下書きになります。</p>
+          <SectionTitle>続きに入るときの材料</SectionTitle>
+          <p className="text-sm text-slate-700">願いの土台はそのまま引き継ぎます。直近の振り返りは、次にどこを見直すか考えるためのメモとして参照します。</p>
           <div className="grid gap-3 md:grid-cols-3">
             {[
               {
                 title: "今できていること",
                 before: continueSummary.before_current_state,
-                after: continueSummary.after_current_state,
-                note: "今日気づいたことを引き継ぐ",
+                note: "願いの土台として維持する",
               },
               {
                 title: "まだできていないこと",
                 before: continueSummary.before_not_yet,
-                after: continueSummary.after_not_yet,
-                note: "まだ気になることを引き継ぐ",
+                note: "願いの土台として維持する",
               },
               {
                 title: "できるようになりたいこと",
                 before: continueSummary.before_desired_state,
-                after: continueSummary.after_desired_state,
-                note: "次にやってみたいことを引き継ぐ",
+                note: "願いの土台として維持する",
               },
             ].map((item) => (
               <div key={item.title} className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-sm font-medium text-slate-900">{item.title}</p>
-                <p className="mt-2 text-xs text-slate-500">前の入力</p>
+                <p className="mt-2 text-xs text-slate-600">いまの土台</p>
                 <p className="mt-1 text-sm text-slate-700">{item.before || "まだありません"}</p>
-                <p className="mt-3 text-xs text-slate-500">今回の初期値</p>
-                <p className="mt-1 text-sm font-medium text-slate-900">{item.after || "まだありません"}</p>
                 <p className="mt-2 text-xs text-amber-800">{item.note}</p>
               </div>
             ))}
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-sm font-medium text-slate-900">直近の振り返りメモ</p>
+            <p className="mt-1 text-sm text-slate-700">次の問いを考えるときの参考です。必要なら「今いちばん気になること」や問い候補選びに反映します。</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {[
+                {
+                  title: "今日気づいたこと",
+                  value: continueSummary.latest_reflection_learned,
+                },
+                {
+                  title: "まだ気になること",
+                  value: continueSummary.latest_reflection_unknown,
+                },
+                {
+                  title: "次にやってみたいこと",
+                  value: continueSummary.latest_reflection_next_step,
+                },
+              ].map((item) => (
+                <div key={item.title} className="rounded-2xl bg-slate-50 p-4">
+                  <p className="text-sm font-medium text-slate-900">{item.title}</p>
+                  <p className="mt-2 text-sm text-slate-700">{item.value || "まだありません"}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </Card>
       ) : null}

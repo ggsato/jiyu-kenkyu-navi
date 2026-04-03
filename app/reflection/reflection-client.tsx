@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui";
+import { Card, LoadingBlock } from "@/components/ui";
 import { INPUT_LIMITS, limitLabel } from "@/lib/input-limits";
 
 type Reflection = {
@@ -95,38 +95,44 @@ export function ReflectionClient({
         <button type="button" className="btn-primary w-full" onClick={submit} disabled={isPending || !activeQuestionId}>
           {isPending ? "保存中..." : "振り返りを保存"}
         </button>
+        {isPending ? (
+          <LoadingBlock
+            title="振り返りを保存しています"
+            description="今日の気づきと次の一歩を、次の問い作りにつながる形で整えています。"
+          />
+        ) : null}
       </Card>
 
       <Card className="space-y-4">
-        <p className="text-sm font-medium text-slate-900">次の問い作りに引き継がれる内容</p>
-        <p className="text-sm text-slate-600">保存すると、今の願いを続けるときの下書きが下の対応で更新されます。</p>
+        <p className="text-sm font-medium text-slate-900">ホームと次の問い作りに活きる内容</p>
+        <p className="text-sm text-slate-700">ここで書いた内容は、願いの土台を自動で上書きしません。ホームの声掛けや次の一歩、次の問いを考えるときの参考として使います。</p>
         {[
           {
-            title: "今できていること",
+            title: "願いの土台",
             before: previousWishState.current_state,
             after: learned,
-            note: "今日気づいたこと",
+            note: "今できていることはそのまま維持する",
           },
           {
-            title: "まだできていないこと",
+            title: "直近の見直しメモ",
             before: previousWishState.not_yet,
             after: unknown,
-            note: "まだ気になること",
+            note: "まだ気になることは、次にどこを見るか考える材料にする",
           },
           {
-            title: "できるようになりたいこと",
+            title: "次の一歩の候補",
             before: previousWishState.desired_state,
             after: nextStepText,
-            note: "次にやってみたいこと",
+            note: "次にやってみたいことは、ホームの次の一歩や次の問いの参考にする",
           },
         ].map((item) => (
           <div key={item.title} className="rounded-2xl bg-slate-50 p-4">
             <p className="text-sm font-medium text-slate-900">{item.title}</p>
-            <p className="mt-2 text-xs text-slate-500">前の入力</p>
+            <p className="mt-2 text-xs text-slate-600">現在の内容</p>
             <p className="mt-1 text-sm text-slate-700">{item.before || "まだありません"}</p>
-            <p className="mt-3 text-xs text-slate-500">今回の入力</p>
+            <p className="mt-3 text-xs text-slate-600">今回の振り返り</p>
             <p className="mt-1 text-sm font-medium text-slate-900">{item.after || "まだありません"}</p>
-            <p className="mt-2 text-xs text-amber-800">{item.note} がここに入ります。</p>
+            <p className="mt-2 text-xs text-amber-800">{item.note}</p>
           </div>
         ))}
       </Card>

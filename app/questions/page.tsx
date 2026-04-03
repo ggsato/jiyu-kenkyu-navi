@@ -46,9 +46,9 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
         wish_id: activeQuestion.wish.id,
         wish_text: activeQuestion.wish.text,
         reason: activeQuestion.wish.reason || "",
-        current_state: latestReflection?.learned || activeQuestion.wish.currentState || "",
-        not_yet: latestReflection?.unknown || activeQuestion.wish.notYet || "",
-        desired_state: latestReflection?.nextStepText || activeQuestion.wish.desiredState || "",
+        current_state: activeQuestion.wish.currentState || "",
+        not_yet: activeQuestion.wish.notYet || "",
+        desired_state: activeQuestion.wish.desiredState || "",
         next_curiosity_text: latestReflection?.nextStepText || "",
         question_text: "",
         purpose_focus: "compare",
@@ -103,6 +103,9 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
                 after_current_state: continueTemplate.current_state,
                 after_not_yet: continueTemplate.not_yet,
                 after_desired_state: continueTemplate.desired_state,
+                latest_reflection_learned: latestReflection?.learned || "",
+                latest_reflection_unknown: latestReflection?.unknown || "",
+                latest_reflection_next_step: latestReflection?.nextStepText || "",
               }
             : null
         }
