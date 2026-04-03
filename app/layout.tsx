@@ -1,11 +1,18 @@
 import "./globals.css";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { ReactNode } from "react";
 import { NavLink } from "@/components/nav-link";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "自由研究ナビ",
   description: "願いを今日の一歩に変えるためのMVP",
+  formatDetection: {
+    telephone: false,
+    date: false,
+    email: false,
+    address: false,
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
