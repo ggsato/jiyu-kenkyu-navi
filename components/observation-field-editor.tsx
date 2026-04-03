@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { SectionTitle } from "@/components/ui";
+import { LoadingBlock, SectionTitle } from "@/components/ui";
 
 export type EditableObservationField = {
   id: string;
@@ -57,6 +57,7 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState("");
   const [customError, setCustomError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const [customField, setCustomField] = useState({
     label: "",
@@ -81,6 +82,7 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
 
   function addCustomField() {
     setCustomError("");
+    setSuccessMessage("");
     const label = customField.label.trim();
 
     if (!label) {
@@ -137,6 +139,7 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
 
   function saveFields() {
     setError("");
+    setSuccessMessage("");
 
     const hasSelected = draftFields.some((field) => field.isSelected);
 
@@ -178,6 +181,7 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
         allFields: (data.all_fields || []) as EditableObservationField[],
       };
       setDraftFields(payload.allFields);
+      setSuccessMessage("見方を更新しました。");
       onSaved(payload);
     });
   }
@@ -190,7 +194,7 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
           {isAdding ? "追加を閉じる" : "項目を足す"}
         </button>
       </div>
-      <p className="text-sm text-slate-600">
+      <p className="text-sm text-slate-700">
         問いはそのままにして、今見る項目や名前を育てられます。保存済みの記録本文は書き換えず、項目の見方だけを更新します。
       </p>
 
@@ -308,17 +312,24 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
             </div>
           </div>
           {customError ? <p className="mt-3 text-sm text-red-600">{customError}</p> : null}
-          <div className="mt-3 flex gap-3">
-            <button type="button" className="btn-primary" onClick={addCustomField}>追加する</button>
-            <button type="button" className="btn-secondary" onClick={() => setIsAdding(false)}>閉じる</button>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+            <button type="button" className="btn-primary w-full sm:w-auto" onClick={addCustomField}>追加する</button>
+            <button type="button" className="btn-secondary w-full sm:w-auto" onClick={() => setIsAdding(false)}>閉じる</button>
           </div>
         </div>
       ) : null}
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
+      {successMessage ? <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{successMessage}</p> : null}
       <button type="button" className="btn-primary w-full md:w-auto" onClick={saveFields} disabled={isPending}>
         {isPending ? "更新中..." : "見方を更新する"}
       </button>
+      {isPending ? (
+        <LoadingBlock
+          title="見方を更新しています"
+          description="この問いで使う項目と名前を、保存済みの記録を保ったまま更新しています。"
+        />
+      ) : null}
     </div>
   );
 }

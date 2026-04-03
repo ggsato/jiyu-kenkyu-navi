@@ -59,7 +59,7 @@ export default async function HomePage({
             </div>
           </div>
           <div className="rounded-3xl bg-white p-4 shadow-sm">
-            <p className="text-sm text-slate-500">いまのナビ</p>
+            <p className="text-sm text-slate-600">いまのナビ</p>
             <div className="mt-3 flex items-start gap-4">
               <div className="relative h-20 w-20 shrink-0 rounded-[2rem] bg-[radial-gradient(circle_at_35%_30%,#fff7d6,#ffd166_55%,#ffb703)] shadow-sm">
                 <div className="absolute left-4 top-6 h-2.5 w-2.5 rounded-full bg-slate-800" />
@@ -89,7 +89,7 @@ export default async function HomePage({
         <Card className="md:col-span-2">
           <SectionTitle>ここまでのようす</SectionTitle>
           <p className="mt-3 text-slate-700">{home.trajectory_summary}</p>
-          {home.recent_reflection_summary ? <p className="mt-3 text-sm text-slate-500">この前の気づき: {home.recent_reflection_summary}</p> : null}
+          {home.recent_reflection_summary ? <p className="mt-3 text-sm text-slate-600">この前の気づき: {home.recent_reflection_summary}</p> : null}
         </Card>
       </div>
 
@@ -141,7 +141,7 @@ export default async function HomePage({
             )}
           </div>
           {home.observation_summary.recentAdded.length > 0 ? (
-            <p className="mt-4 text-xs text-slate-500">最近ふえた項目: {home.observation_summary.recentAdded.join(" / ")}</p>
+            <p className="mt-4 text-xs text-slate-600">最近ふえた項目: {home.observation_summary.recentAdded.join(" / ")}</p>
           ) : null}
         </Card>
       </div>
@@ -154,7 +154,7 @@ export default async function HomePage({
           </div>
           {params.from === "reflection" ? <p className="mt-3 text-sm font-medium text-amber-800">振り返りで見えてきたことをもとに、今の願いを続けるか、別の願いを始めるか決めよう。</p> : null}
           <p className="mt-3 text-slate-700">{home.next_step_summary}</p>
-          <div className="mt-5 flex gap-3">
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
             <Link href={`/records?source=next_step&questionId=${home.active_question_id}`} className="btn-primary">
               記録を1件追加
             </Link>
@@ -162,7 +162,7 @@ export default async function HomePage({
               振り返る
             </Link>
           </div>
-          <div className="mt-3 flex gap-3">
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
             <Link href={`/questions?mode=continue${params.from === "reflection" ? "&from=reflection" : ""}`} className="btn-secondary">
               今の願いの次の問い
             </Link>
@@ -187,7 +187,7 @@ export default async function HomePage({
             ) : (
               home.recent_records.map((record) => (
                 <article key={record.id} className="rounded-2xl bg-slate-50 p-3">
-                  <p className="text-xs text-slate-500">{new Date(record.recordedAt).toLocaleString("ja-JP")}</p>
+                  <p className="text-xs text-slate-600">{new Date(record.recordedAt).toLocaleString("ja-JP")}</p>
                   <p className="mt-1 font-medium text-slate-900">{record.body}</p>
                 </article>
               ))
