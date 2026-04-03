@@ -9,6 +9,7 @@ type WishSummary = {
   questionId: string;
   questionText: string;
   updatedAt: string;
+  updatedAtLabel: string;
   isActive: boolean;
 };
 
@@ -54,7 +55,7 @@ export function WishSwitcher({ wishes }: { wishes: WishSummary[] }) {
             <div>
               <p className="font-medium text-slate-900">{wish.text}</p>
               <p className="mt-1 text-sm text-slate-600">{wish.questionText}</p>
-              <p className="mt-2 text-xs text-slate-500">{new Date(wish.updatedAt).toLocaleDateString("ja-JP")} に更新</p>
+              <p className="mt-2 text-xs text-slate-500">{wish.updatedAtLabel} に更新</p>
             </div>
             {wish.isActive ? (
               <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">いま見ている</span>

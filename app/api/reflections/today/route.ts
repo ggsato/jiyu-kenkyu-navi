@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserIdFromRequest } from "@/lib/current-user";
+import { getTodayDateInAppTimeZone } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const questionId = searchParams.get("questionId");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayDateInAppTimeZone();
   const userId = await getCurrentUserIdFromRequest(request);
 
   if (!questionId) {
