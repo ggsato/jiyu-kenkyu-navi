@@ -1,8 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { QuestionsClient } from "./questions-client";
-import { getCurrentUserId, listAvailableUsers } from "@/lib/current-user";
+import { getCurrentUserId } from "@/lib/current-user";
 import { PageShell } from "@/components/ui";
-import { UserSwitcher } from "@/components/user-switcher";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +17,6 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
   const requestedMode = params.mode === "new" ? "new" : "continue";
   const fromReflection = params.from === "reflection";
   const currentUserId = await getCurrentUserId();
-  const users = await listAvailableUsers(currentUserId);
 
   const activeQuestion = await prisma.question.findFirst({
     where: {
@@ -79,7 +77,6 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
 
   return (
     <PageShell>
-      <UserSwitcher users={users} currentUserId={currentUserId} />
       <QuestionsClient
         key={`${activeQuestion?.wish.id || "new"}:${requestedMode}:${fromReflection ? "reflection" : "default"}`}
         continueTemplate={continueTemplate}

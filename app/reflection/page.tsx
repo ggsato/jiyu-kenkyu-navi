@@ -1,15 +1,13 @@
 import { ReflectionClient } from "./reflection-client";
 import { prisma } from "@/lib/prisma";
 import { PageShell, Card, SectionTitle } from "@/components/ui";
-import { getCurrentUserId, listAvailableUsers } from "@/lib/current-user";
-import { UserSwitcher } from "@/components/user-switcher";
+import { getCurrentUserId } from "@/lib/current-user";
 import { getTodayDateInAppTimeZone } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReflectionPage() {
   const currentUserId = await getCurrentUserId();
-  const users = await listAvailableUsers(currentUserId);
   const activeQuestion = await prisma.question.findFirst({
     where: {
       status: "active",
@@ -34,7 +32,6 @@ export default async function ReflectionPage() {
 
   return (
     <PageShell>
-      <UserSwitcher users={users} currentUserId={currentUserId} />
       <Card>
         <SectionTitle>振り返り</SectionTitle>
         <p className="mt-2 text-sm text-slate-600">今日気づいたことや、まだ気になること、次にやってみたいことを短く残します。</p>

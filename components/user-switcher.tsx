@@ -6,9 +6,11 @@ import { useState, useTransition } from "react";
 export function UserSwitcher({
   users,
   currentUserId,
+  compact = false,
 }: {
   users: Array<{ id: string; name: string | null }>;
   currentUserId: string;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [selectedUserId, setSelectedUserId] = useState(currentUserId);
@@ -38,8 +40,8 @@ export function UserSwitcher({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <label className="field-label">だれが使うか</label>
+    <div className={compact ? "min-w-[180px]" : "rounded-2xl border border-slate-200 bg-white p-4"}>
+      <label className={compact ? "mb-1 block text-xs font-medium text-slate-500" : "field-label"}>{compact ? "使う人" : "だれが使うか"}</label>
       <select value={selectedUserId} onChange={(event) => switchUser(event.target.value)} disabled={isPending}>
         {users.map((user) => (
           <option key={user.id} value={user.id}>

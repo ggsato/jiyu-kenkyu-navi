@@ -2,14 +2,12 @@ import { prisma } from "@/lib/prisma";
 import { ensureQuestionFieldDefinitions } from "@/lib/question-field-definitions";
 import { PageShell, Card, SectionTitle } from "@/components/ui";
 import { RecordsClient } from "./records-client";
-import { getCurrentUserId, listAvailableUsers } from "@/lib/current-user";
-import { UserSwitcher } from "@/components/user-switcher";
+import { getCurrentUserId } from "@/lib/current-user";
 
 export const dynamic = "force-dynamic";
 
 export default async function RecordsPage() {
   const currentUserId = await getCurrentUserId();
-  const users = await listAvailableUsers(currentUserId);
   const activeQuestion = await prisma.question.findFirst({
     where: {
       status: "active",
@@ -52,7 +50,6 @@ export default async function RecordsPage() {
 
   return (
     <PageShell>
-      <UserSwitcher users={users} currentUserId={currentUserId} />
       <Card>
         <SectionTitle>記録</SectionTitle>
         <p className="mt-2 text-sm text-slate-600">今何をしているかを残し、同じ願いの観測を積み上げながら次に何を見るとよいかを見つけます。</p>
