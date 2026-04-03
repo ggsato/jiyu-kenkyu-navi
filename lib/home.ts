@@ -3,9 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { generateHomeSummary } from "@/lib/ai";
 import { HOME_SUMMARY_FALLBACK } from "@/lib/constants";
 import { logEvent } from "@/lib/logging";
+import { formatDateInAppTimeZone, formatDateTimeInAppTimeZone, getTodayDateInAppTimeZone } from "@/lib/utils";
 
 type RecordWithAttachments = PrismaRecord & {
   attachments: RecordAttachment[];
+  recordedAtLabel?: string;
 };
 
 type HomePayload =
@@ -37,6 +39,7 @@ type HomePayload =
         questionId: string;
         questionText: string;
         updatedAt: string;
+        updatedAtLabel: string;
         isActive: boolean;
       }>;
     }
@@ -68,6 +71,7 @@ type HomePayload =
         questionId: string;
         questionText: string;
         updatedAt: string;
+        updatedAtLabel: string;
         isActive: boolean;
       }>;
     };
@@ -113,6 +117,7 @@ export async function listWishSummaries(userId: string, activeQuestionId?: strin
       questionId: wish.questions[0]!.id,
       questionText: wish.questions[0]!.text,
       updatedAt: wish.updatedAt.toISOString(),
+      updatedAtLabel: formatDateInAppTimeZone(wish.updatedAt),
       isActive: wish.questions[0]!.id === activeQuestionId,
     }));
 }
@@ -157,7 +162,7 @@ export async function buildHomePayload(userId: string): Promise<HomePayload> {
       active_wish_id: null,
       latest_reflection: null,
       recent_records: [],
-      pending_reflection_date: new Date().toISOString().slice(0, 10),
+      pending_reflection_date: getTodayDateInAppTimeZone(),
       observation_summary: {
         current: [],
         frequent: [],
@@ -267,8 +272,11 @@ export async function buildHomePayload(userId: string): Promise<HomePayload> {
     active_question_id: activeQuestion.id,
     active_wish_id: activeQuestion.wishId,
     latest_reflection: latestReflection,
-    recent_records: activeQuestion.records,
-    pending_reflection_date: new Date().toISOString().slice(0, 10),
+    recent_records: activeQuestion.records.map((record) => ({
+      ...record,
+      recordedAtLabel: formatDateTimeInAppTimeZone(record.recordedAt),
+    })),
+    pending_reflection_date: getTodayDateInAppTimeZone(),
     observation_summary: observationSummary,
     wishes,
   };

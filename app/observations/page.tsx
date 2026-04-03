@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, PageShell, Pill, SectionTitle } from "@/components/ui";
 import { getCurrentUserId } from "@/lib/current-user";
 import { buildObservationStructurePayload, type ObservationNode } from "@/lib/observations";
+import { formatDateInAppTimeZone } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,7 @@ function ObservationTree({
           {node.lastSelectedQuestionText ? (
             <p className="mt-2 text-xs text-slate-600">
               最後に使った問い: {node.lastSelectedQuestionText}
-              {node.lastSelectedAt ? ` (${new Date(node.lastSelectedAt).toLocaleDateString("ja-JP")})` : ""}
+              {node.lastSelectedAt ? ` (${formatDateInAppTimeZone(node.lastSelectedAt)})` : ""}
             </p>
           ) : null}
           {node.children.length > 0 ? (

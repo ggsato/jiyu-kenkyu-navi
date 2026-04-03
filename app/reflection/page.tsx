@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { PageShell, Card, SectionTitle } from "@/components/ui";
 import { getCurrentUserId, listAvailableUsers } from "@/lib/current-user";
 import { UserSwitcher } from "@/components/user-switcher";
+import { getTodayDateInAppTimeZone } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function ReflectionPage() {
     },
   });
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayDateInAppTimeZone();
   const reflection = activeQuestion
     ? await prisma.reflection.findUnique({
         where: {
