@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Card, Pill, SectionTitle } from "@/components/ui";
+import { Card, LoadingBlock, Pill, SectionTitle } from "@/components/ui";
 import { INPUT_LIMITS, limitLabel } from "@/lib/input-limits";
 
 type Member = {
@@ -26,6 +26,8 @@ export function FamilySettingsClient({
   );
   const [familyError, setFamilyError] = useState("");
   const [memberError, setMemberError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [pendingAction, setPendingAction] = useState<"family" | "add-member" | "rename-member" | "">("");
   const [isPending, startTransition] = useTransition();
 
   function refresh() {
@@ -34,8 +36,10 @@ export function FamilySettingsClient({
 
   function updateFamilyName() {
     setFamilyError("");
+    setSuccessMessage("");
 
     startTransition(async () => {
+      setPendingAction("family");
       const response = await fetch("/api/family", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -46,17 +50,22 @@ export function FamilySettingsClient({
 
       if (!response.ok) {
         setFamilyError(data.error || "家族名を更新できませんでした");
+        setPendingAction("");
         return;
       }
 
+      setSuccessMessage("家族名を更新しました。");
+      setPendingAction("");
       refresh();
     });
   }
 
   function addMember() {
     setMemberError("");
+    setSuccessMessage("");
 
     startTransition(async () => {
+      setPendingAction("add-member");
       const response = await fetch("/api/family/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -67,18 +76,23 @@ export function FamilySettingsClient({
 
       if (!response.ok) {
         setMemberError(data.error || "メンバーを追加できませんでした");
+        setPendingAction("");
         return;
       }
 
       setNewMemberName("");
+      setSuccessMessage("メンバーを追加しました。");
+      setPendingAction("");
       refresh();
     });
   }
 
   function renameMember(userId: string) {
     setMemberError("");
+    setSuccessMessage("");
 
     startTransition(async () => {
+      setPendingAction("rename-member");
       const response = await fetch(`/api/family/members/${userId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -89,9 +103,12 @@ export function FamilySettingsClient({
 
       if (!response.ok) {
         setMemberError(data.error || "表示名を更新できませんでした");
+        setPendingAction("");
         return;
       }
 
+      setSuccessMessage("表示名を更新しました。");
+      setPendingAction("");
       refresh();
     });
   }
@@ -105,12 +122,21 @@ export function FamilySettingsClient({
           <input maxLength={INPUT_LIMITS.family_name} value={familyName} onChange={(event) => setFamilyName(event.target.value)} />
           <p className="mt-1 text-xs text-slate-500">{limitLabel(familyName.length, INPUT_LIMITS.family_name)}</p>
         </div>
-        {familyError ? <p className="text-sm text-red-600">{familyError}</p> : null}
+        {familyError ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{familyError}</p> : null}
+        {successMessage && pendingAction !== "add-member" && pendingAction !== "rename-member" ? (
+          <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{successMessage}</p>
+        ) : null}
         <button type="button" className="btn-primary w-full" onClick={updateFamilyName} disabled={isPending}>
           家族名を更新
         </button>
+        {isPending && pendingAction === "family" ? (
+          <LoadingBlock
+            title="家族名を更新しています"
+            description="この家族で使う表示名を保存しています。"
+          />
+        ) : null}
 
-        <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+        <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
           今は同じ家族の中でユーザーを切り替えて使います。削除や招待はまだ入れていません。
         </div>
       </Card>
@@ -145,13 +171,22 @@ export function FamilySettingsClient({
                 }
               />
               <p className="mt-1 text-xs text-slate-500">{limitLabel((memberNames[member.userId] || "").length, INPUT_LIMITS.user_name)}</p>
-              <button type="button" className="btn-secondary mt-3" onClick={() => renameMember(member.userId)} disabled={isPending}>
+              <button type="button" className="btn-secondary mt-3 w-full md:w-auto" onClick={() => renameMember(member.userId)} disabled={isPending}>
                 表示名を更新
               </button>
             </div>
           ))}
         </div>
-        {memberError ? <p className="text-sm text-red-600">{memberError}</p> : null}
+        {memberError ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{memberError}</p> : null}
+        {successMessage && pendingAction !== "family" ? (
+          <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{successMessage}</p>
+        ) : null}
+        {isPending && pendingAction !== "family" ? (
+          <LoadingBlock
+            title={pendingAction === "add-member" ? "メンバーを追加しています" : "表示名を更新しています"}
+            description={pendingAction === "add-member" ? "家族の切り替え候補に新しいメンバーを追加しています。" : "この家族で使う表示名を保存しています。"}
+          />
+        ) : null}
       </Card>
     </div>
   );

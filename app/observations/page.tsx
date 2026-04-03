@@ -51,7 +51,7 @@ function ObservationTree({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-base font-semibold text-slate-900">{node.label}</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-slate-600">
                 {fieldTypeLabel(node.type)} / {roleLabel(node.role)}
               </p>
             </div>
@@ -67,9 +67,9 @@ function ObservationTree({
             <div className="rounded-2xl bg-white/80 px-3 py-2 text-sm text-slate-700">今回は使わない: {node.skippedCount}回</div>
           </div>
           {node.why ? <p className="mt-3 text-sm text-slate-700">理由: {node.why}</p> : null}
-          {node.howToUse ? <p className="mt-2 text-xs text-slate-500">使い方: {node.howToUse}</p> : null}
+          {node.howToUse ? <p className="mt-2 text-xs text-slate-600">使い方: {node.howToUse}</p> : null}
           {node.lastSelectedQuestionText ? (
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-slate-600">
               最後に使った問い: {node.lastSelectedQuestionText}
               {node.lastSelectedAt ? ` (${new Date(node.lastSelectedAt).toLocaleDateString("ja-JP")})` : ""}
             </p>
@@ -96,7 +96,7 @@ export default async function ObservationsPage() {
           <p className="mb-3 text-sm text-slate-600">見方の地図</p>
           <h1 className="text-3xl font-bold text-slate-900">まだ見方の地図はありません</h1>
           <p className="mt-3 max-w-2xl text-slate-700">最初の問いを作ると、この願いで見ていく項目のまとまりがここにたまっていきます。</p>
-          <div className="mt-6 flex gap-3">
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Link href="/questions" className="btn-primary">
               問いを作る
             </Link>
@@ -117,9 +117,9 @@ export default async function ObservationsPage() {
           <div className="max-w-3xl">
             <h1 className="text-3xl font-bold text-slate-900">この願いの見方の地図</h1>
             <p className="mt-3 text-slate-700">願い: {payload.wishText}</p>
-            <p className="mt-2 text-sm text-slate-600">今の問い: {payload.activeQuestionText}</p>
+            <p className="mt-2 text-sm text-slate-700">今の問い: {payload.activeQuestionText}</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <Link href="/" className="btn-secondary">
               ホームへ戻る
             </Link>
@@ -185,7 +185,7 @@ export default async function ObservationsPage() {
           <SectionTitle>つながり</SectionTitle>
           <Pill>この願いで見ていく項目</Pill>
         </div>
-        <p className="mt-3 text-sm text-slate-600">大きい項目から細かい項目へのつながりをたどれます。今の問いで使う項目は強調表示されます。</p>
+        <p className="mt-3 text-sm text-slate-700">大きい項目から細かい項目へのつながりをたどれます。今の問いで使う項目は強調表示されます。</p>
         <div className="mt-4">
           <ObservationTree nodes={payload.tree} />
         </div>
