@@ -197,6 +197,7 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
       <p className="text-sm text-slate-700">
         問いはそのままにして、今見る項目や名前を育てられます。保存済みの記録本文は書き換えず、項目の見方だけを更新します。
       </p>
+      <p className="text-sm text-slate-600">主操作は「この問いで使う」を選ぶことです。役割や選択肢などの詳細は必要なときだけ開いて直します。</p>
 
       <div className="space-y-3">
         {draftFields.map((field) => (
@@ -211,49 +212,52 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
                 この問いで使う
               </label>
               <div className="flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">{field.role}</span>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">{field.type}</span>
+                {field.isDefault ? <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">AI初期提案</span> : null}
                 {field.derivedFromLabel ? <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-900">細分化元: {field.derivedFromLabel}</span> : null}
               </div>
             </div>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <div>
-                <label className="field-label">項目名</label>
-                <input value={field.label} onChange={(event) => updateField(field.key, { label: event.target.value })} />
-              </div>
-              <div>
-                <label className="field-label">役割</label>
-                <select value={field.role} onChange={(event) => updateField(field.key, { role: event.target.value as EditableObservationField["role"] })}>
-                  <option value="core">まず残す</option>
-                  <option value="compare">違いを見る</option>
-                  <option value="optional">気になったら足す</option>
-                </select>
-              </div>
-              <div>
-                <label className="field-label">単位</label>
-                <input value={field.unit || ""} onChange={(event) => updateField(field.key, { unit: event.target.value || null })} />
-              </div>
-              <div>
-                <label className="field-label">選択肢</label>
-                <input
-                  value={field.options.join(", ")}
-                  disabled={field.type !== "select"}
-                  onChange={(event) =>
-                    updateField(field.key, {
-                      options: event.target.value.split(",").map((item) => item.trim()).filter(Boolean),
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label className="field-label">何を見るためか</label>
-                <input value={field.why || ""} onChange={(event) => updateField(field.key, { why: event.target.value || null })} />
-              </div>
-              <div>
-                <label className="field-label">あとでどう使うか</label>
-                <input value={field.howToUse || ""} onChange={(event) => updateField(field.key, { howToUse: event.target.value || null })} />
-              </div>
+            <div className="mt-3">
+              <label className="field-label">項目名</label>
+              <input value={field.label} onChange={(event) => updateField(field.key, { label: event.target.value })} />
             </div>
+            <details className="mt-3 rounded-2xl bg-slate-50 p-3">
+              <summary className="cursor-pointer text-sm font-medium text-slate-800">詳細を開く</summary>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="field-label">役割</label>
+                  <select value={field.role} onChange={(event) => updateField(field.key, { role: event.target.value as EditableObservationField["role"] })}>
+                    <option value="core">まず残す</option>
+                    <option value="compare">違いを見る</option>
+                    <option value="optional">気になったら足す</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label">単位</label>
+                  <input value={field.unit || ""} onChange={(event) => updateField(field.key, { unit: event.target.value || null })} />
+                </div>
+                <div>
+                  <label className="field-label">選択肢</label>
+                  <input
+                    value={field.options.join(", ")}
+                    disabled={field.type !== "select"}
+                    onChange={(event) =>
+                      updateField(field.key, {
+                        options: event.target.value.split(",").map((item) => item.trim()).filter(Boolean),
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="field-label">何を見るためか</label>
+                  <input value={field.why || ""} onChange={(event) => updateField(field.key, { why: event.target.value || null })} />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="field-label">あとでどう使うか</label>
+                  <input value={field.howToUse || ""} onChange={(event) => updateField(field.key, { howToUse: event.target.value || null })} />
+                </div>
+              </div>
+            </details>
           </div>
         ))}
       </div>

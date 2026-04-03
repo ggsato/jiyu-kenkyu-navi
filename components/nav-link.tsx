@@ -1,9 +1,10 @@
 "use client";
 
+import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export function NavLink({ href, children }: { href: string; children: string }) {
+export function NavLink({ href, children }: { href: Route; children: string }) {
   const pathname = usePathname();
   const isActive = pathname === href;
 
