@@ -432,11 +432,34 @@ export async function generateSplitFieldSuggestions(input: Record<string, unknow
 }
 
 export async function generateHomeSummary(input: Record<string, unknown>) {
+  const flowSummary = typeof input.flow_summary === "object" && input.flow_summary !== null
+    ? input.flow_summary as {
+        record_insight_summary?: string;
+        learned?: string | null;
+        unknown?: string | null;
+        next_step_text?: string | null;
+      }
+    : null;
   return createJson(
     homeModel,
     [
       "あなたはやさしい伴走者です。",
       "ホーム画面用の短い文を作ってください。",
+      flowSummary?.record_insight_summary
+        ? `記録の圧縮要約: ${flowSummary.record_insight_summary}`
+        : "",
+      flowSummary?.learned
+        ? `流れを見るで整理した気づき: ${flowSummary.learned}`
+        : "",
+      flowSummary?.unknown
+        ? `流れを見るで整理した未解決: ${flowSummary.unknown}`
+        : "",
+      flowSummary?.next_step_text
+        ? `流れを見るで整理した次の一歩候補: ${flowSummary.next_step_text}`
+        : "",
+      flowSummary
+        ? "生の記録の羅列よりも、圧縮要約と流れメモを優先して現在地と次の一歩をまとめてください。"
+        : "",
       "",
       "必ず次の JSON だけを返してください。",
       "{",

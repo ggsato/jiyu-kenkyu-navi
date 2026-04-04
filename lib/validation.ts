@@ -72,7 +72,15 @@ export const reflectionSchema = z.object({
 export const homeSummarySchema = z.object({
   wish_text: z.string(),
   question_text: z.string(),
-  recent_records_summary: z.array(z.record(z.string(), z.unknown())),
+  recent_records_summary: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+  flow_summary: z
+    .object({
+      record_insight_summary: z.string().optional().default(""),
+      learned: z.string().nullable().optional(),
+      unknown: z.string().nullable().optional(),
+      next_step_text: z.string().nullable().optional(),
+    })
+    .optional(),
   latest_reflection: z
     .object({
       self_progress_signal: z.string().nullable().optional(),

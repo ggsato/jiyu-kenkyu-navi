@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { QuestionsClient } from "./questions-client";
 import { getCurrentUserId } from "@/lib/current-user";
 import { PageShell } from "@/components/ui";
+import { buildFlowSummaryText } from "@/lib/flow-summary";
 import { buildRecordInsightSummary } from "@/lib/record-visualization";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ type QuestionsPageProps = {
 export default async function QuestionsPage({ searchParams }: QuestionsPageProps) {
   const params = (await searchParams) || {};
   const requestedMode = params.mode === "new" ? "new" : "continue";
-  const fromReflection = params.from === "reflection";
+  const fromFlow = params.from === "reflection" || params.from === "flow";
   const currentUserId = await getCurrentUserId();
 
   const activeQuestion = await prisma.question.findFirst({
@@ -44,7 +45,8 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
 
   const latestReflection = activeQuestion?.reflections[0] || null;
   const continueRecordInsightSummary = activeQuestion
-    ? buildRecordInsightSummary(
+    ? buildFlowSummaryText({
+        recordInsightSummary: buildRecordInsightSummary(
         activeQuestion.records.map((record) => ({
           recordedAt: record.recordedAt.toISOString(),
           kvFields: (record.kvFields as Record<string, unknown>) || {},
@@ -59,7 +61,15 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
           isPrimaryMetric: focus.isPrimaryMetric,
         })),
         activeQuestion.purposeFocus,
-      )
+        ),
+        latestReflection: latestReflection
+          ? {
+              learned: latestReflection.learned,
+              unknown: latestReflection.unknown,
+              nextStepText: latestReflection.nextStepText,
+            }
+          : null,
+      })
     : "";
 
   const continueTemplate = activeQuestion
@@ -70,7 +80,7 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
         current_state: activeQuestion.wish.currentState || "",
         not_yet: activeQuestion.wish.notYet || "",
         desired_state: activeQuestion.wish.desiredState || "",
-        next_curiosity_text: latestReflection?.nextStepText || "",
+        next_curiosity_text: fromFlow ? latestReflection?.nextStepText || "" : latestReflection?.nextStepText || "",
         question_text: "",
         purpose_focus: "compare",
       }
@@ -101,12 +111,12 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
   return (
     <PageShell>
       <QuestionsClient
-        key={`${activeQuestion?.wish.id || "new"}:${requestedMode}:${fromReflection ? "reflection" : "default"}`}
+        key={`${activeQuestion?.wish.id || "new"}:${requestedMode}:${fromFlow ? "flow" : "default"}`}
         continueTemplate={continueTemplate}
         newTemplate={newTemplate}
         initialMode={activeQuestion ? requestedMode : "new"}
         hasActiveWish={Boolean(activeQuestion)}
-        forceTemplate={fromReflection}
+        forceTemplate={fromFlow}
         preferredFieldKeys={
           activeQuestion
             ? activeQuestion.observationFocuses.map((focus) => focus.fieldDefinition.key)

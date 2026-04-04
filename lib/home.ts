@@ -2,8 +2,9 @@ import { Reflection, Record as PrismaRecord, RecordAttachment } from "@prisma/cl
 import { prisma } from "@/lib/prisma";
 import { generateHomeSummary } from "@/lib/ai";
 import { HOME_SUMMARY_FALLBACK } from "@/lib/constants";
+import { buildFlowSummaryText } from "@/lib/flow-summary";
 import { logEvent } from "@/lib/logging";
-import { buildRecordVisualization, type RecordVisualization } from "@/lib/record-visualization";
+import { buildRecordInsightSummary, buildRecordVisualization, type RecordVisualization } from "@/lib/record-visualization";
 import { formatDateInAppTimeZone, formatDateTimeInAppTimeZone, getTodayDateInAppTimeZone } from "@/lib/utils";
 
 type RecordWithAttachments = PrismaRecord & {
@@ -264,11 +265,43 @@ export async function buildHomePayload(userId: string): Promise<HomePayload> {
     })),
     activeQuestion.purposeFocus,
   );
+  const recordInsightSummary = buildRecordInsightSummary(
+    activeQuestion.records.map((record) => ({
+      recordedAt: record.recordedAt.toISOString(),
+      kvFields: (record.kvFields as globalThis.Record<string, unknown>) || {},
+    })),
+    currentFocuses.map((focus) => ({
+      key: focus.fieldDefinition.key,
+      label: focus.fieldDefinition.label,
+      type: focus.fieldDefinition.type,
+      unit: focus.fieldDefinition.unit,
+      role: focus.fieldDefinition.role,
+      why: focus.fieldDefinition.why,
+      isPrimaryMetric: focus.isPrimaryMetric,
+    })),
+    activeQuestion.purposeFocus,
+  );
+  const flowSummaryText = buildFlowSummaryText({
+    recordInsightSummary,
+    latestReflection: latestReflection
+      ? {
+          learned: latestReflection.learned,
+          unknown: latestReflection.unknown,
+          nextStepText: latestReflection.nextStepText,
+        }
+      : null,
+  });
 
   const aiSummary = await generateHomeSummary({
     wish_text: activeQuestion.wish.text,
     question_text: activeQuestion.text,
     recent_records_summary: recentRecordsSummary,
+    flow_summary: {
+      record_insight_summary: recordInsightSummary,
+      learned: latestReflection?.learned || null,
+      unknown: latestReflection?.unknown || null,
+      next_step_text: latestReflection?.nextStepText || null,
+    },
     latest_reflection: latestReflection
       ? {
           self_progress_signal: latestReflection.selfProgressSignal,
@@ -286,7 +319,7 @@ export async function buildHomePayload(userId: string): Promise<HomePayload> {
     state_label: aiSummary.state_label || baseLabel,
     record_count: recordCount,
     total_distance: sumDistance._sum.distanceDelta || 0,
-    recent_reflection_summary: latestReflection?.learned || "",
+    recent_reflection_summary: latestReflection?.learned || flowSummaryText,
     trajectory_summary: aiSummary.trajectory_summary || "記録が少しずつたまっています。",
     next_step_summary:
       aiSummary.next_step_summary ||

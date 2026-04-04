@@ -4,7 +4,6 @@ import { RecordVisualizationCard } from "@/components/record-visualization";
 import { Card, PageShell, SectionTitle } from "@/components/ui";
 import { getCurrentUserId } from "@/lib/current-user";
 import { WishSwitcher } from "@/components/wish-switcher";
-import { formatDateTimeInAppTimeZone } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -61,16 +60,16 @@ export default async function HomePage({
               </div>
               <div className="rounded-3xl bg-[linear-gradient(135deg,#fff7d6,#ffffff)] p-5 ring-1 ring-amber-200">
                 <SectionTitle>次の一歩</SectionTitle>
-                {params.from === "reflection" ? (
-                  <p className="mt-3 text-sm font-medium text-amber-800">振り返りで見えてきたことをもとに、今の願いを続けるか、別の願いを始めるか決めよう。</p>
+                {params.from === "reflection" || params.from === "flow" ? (
+                  <p className="mt-3 text-sm font-medium text-amber-800">流れを見て整理したことをもとに、今の問いを続けるか、次にどこを見直すか考えよう。</p>
                 ) : null}
                 <p className="mt-3 text-base leading-7 text-slate-800">{home.next_step_summary}</p>
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                   <Link href={`/records?source=next_step&questionId=${home.active_question_id}`} className="btn-primary">
                     記録を1件追加
                   </Link>
-                  <Link href="/reflection" className="btn-secondary">
-                    振り返る
+                  <Link href="/flow" className="btn-secondary">
+                    流れを見る
                   </Link>
                 </div>
               </div>
@@ -94,87 +93,31 @@ export default async function HomePage({
             </div>
 
             <div className="rounded-3xl bg-white/70 p-4 shadow-sm">
-              <p className="text-sm font-semibold text-slate-900">流れの見え方</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-900">流れの見え方</p>
+                <Link href="/flow" className="text-sm font-medium text-amber-900 underline-offset-2 hover:underline">
+                  流れを見る
+                </Link>
+              </div>
               <div className="mt-3">
                 <RecordVisualizationCard visualization={home.record_visualization} />
               </div>
             </div>
 
             <div className="rounded-3xl bg-white/70 p-4 shadow-sm">
-              <p className="text-sm font-semibold text-slate-900">最近の記録</p>
-              <div className="mt-2 space-y-2">
-                {home.recent_records.length === 0 ? (
-                  <p className="text-sm text-slate-600">まだ記録はありません。</p>
-                ) : (
-                  home.recent_records.slice(0, 2).map((record) => (
-                    <article key={record.id} className="rounded-2xl bg-white p-3">
-                      <p className="text-xs text-slate-600">{"recordedAtLabel" in record ? record.recordedAtLabel : formatDateTimeInAppTimeZone(record.recordedAt)}</p>
-                      <p className="mt-1 text-sm font-medium text-slate-900">{record.body}</p>
-                    </article>
-                  ))
-                )}
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">記録を見る</p>
+                  <p className="mt-1 text-sm text-slate-600">生の記録データを一覧や表で確認したいときは、記録ページから見ます。</p>
+                </div>
+                <Link href="/records" className="text-sm font-medium text-amber-900 underline-offset-2 hover:underline">
+                  記録へ
+                </Link>
               </div>
             </div>
           </div>
         </div>
       </Card>
-
-      <details className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <summary className="cursor-pointer text-lg font-semibold text-slate-900">今使っている試し方と見方を見る</summary>
-        <p className="mt-3 text-sm text-slate-600">今使っている棚や、お休み中の棚は必要なときにここから見返せます。</p>
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <Card>
-            <div className="flex items-center justify-between gap-3">
-              <SectionTitle>今使っている試し方</SectionTitle>
-              <Link href="/observations" className="text-sm font-medium text-amber-900 underline-offset-2 hover:underline">
-                試し方と見方の地図を見る
-              </Link>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {home.observation_summary.current.length > 0 ? (
-                home.observation_summary.current.map((label) => (
-                  <span key={label} className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
-                    {label}
-                  </span>
-                ))
-              ) : (
-                <p className="text-sm text-slate-600">まだありません。</p>
-              )}
-            </div>
-          </Card>
-          <Card>
-            <SectionTitle>よく使う試し方</SectionTitle>
-            <div className="mt-3 space-y-2">
-              {home.observation_summary.frequent.length > 0 ? (
-                home.observation_summary.frequent.map((item) => (
-                  <div key={item.label} className="rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                    {item.label} {item.count}回
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-slate-600">まだたまりはありません。</p>
-              )}
-            </div>
-          </Card>
-          <Card>
-            <SectionTitle>今は休ませている項目</SectionTitle>
-            <div className="mt-3 space-y-2">
-              {home.observation_summary.resting.length > 0 ? (
-                home.observation_summary.resting.map((label) => (
-                  <div key={label} className="rounded-2xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    {label}
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-slate-600">今はお休みしている項目はありません。</p>
-              )}
-            </div>
-            {home.observation_summary.recentAdded.length > 0 ? (
-              <p className="mt-4 text-xs text-slate-600">最近ふえた棚: {home.observation_summary.recentAdded.join(" / ")}</p>
-            ) : null}
-          </Card>
-        </div>
-      </details>
 
       <details className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <summary className="cursor-pointer text-lg font-semibold text-slate-900">ほかの願いを見る</summary>

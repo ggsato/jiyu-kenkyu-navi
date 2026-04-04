@@ -55,13 +55,12 @@ export default async function RecordsPage() {
     <PageShell>
       <Card>
         <SectionTitle>記録</SectionTitle>
-        <p className="mt-2 text-sm text-slate-600">今回どうしてみたかと、その結果を残しながら、この願いで次に何を試すとよいかを見つけます。</p>
+        <p className="mt-2 text-sm text-slate-600">この問いで使っている項目を表で見ながら、生の記録を追加・修正します。</p>
         <p className="mt-3 text-base font-medium text-slate-900">{activeQuestion?.text || "まずは問いを作ろう"}</p>
       </Card>
       <RecordsClient
         activeQuestionId={activeQuestion?.id || ""}
         activeQuestionText={activeQuestion?.text || ""}
-        activePurposeFocus={activeQuestion?.purposeFocus || "compare"}
         records={serializedRecords}
         fieldDefinitions={fieldDefinitions.map((field) => ({
           id: field.id,

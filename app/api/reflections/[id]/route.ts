@@ -20,7 +20,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     });
 
     if (!existing) {
-      return NextResponse.json({ error: "その振り返りは見つかりませんでした" }, { status: 404 });
+      return NextResponse.json({ error: "その流れメモは見つかりませんでした" }, { status: 404 });
     }
 
     const reflection = await prisma.reflection.update({
@@ -39,6 +39,6 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ reflection });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: "振り返りを更新できませんでした" }, { status: 400 });
+    return NextResponse.json({ error: "流れメモを更新できませんでした" }, { status: 400 });
   }
 }
