@@ -4,8 +4,10 @@ import { useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, LoadingBlock, Pill, SectionTitle } from "@/components/ui";
 import { ObservationFieldEditor, type EditableObservationField } from "@/components/observation-field-editor";
+import { RecordVisualizationCard } from "@/components/record-visualization";
 import { INPUT_LIMITS, limitLabel } from "@/lib/input-limits";
 import { getPrimaryPurposeFocusOption, normalizePurposeFocus } from "@/lib/purpose-focus";
+import { buildRecordVisualization, sortVisualizationFields, summarizeRecord } from "@/lib/record-visualization";
 
 type FieldDefinition = {
   id: string;
@@ -42,6 +44,10 @@ function sortRecordsByRecordedAt(records: RecordItem[]) {
   );
 }
 
+function sortFieldDefinitions(fields: FieldDefinition[]) {
+  return sortVisualizationFields(fields);
+}
+
 export function RecordsClient({
   activeQuestionId,
   activeQuestionText,
@@ -60,7 +66,7 @@ export function RecordsClient({
   const params = useSearchParams();
   const source = params.get("source") || "";
   const [items, setItems] = useState(records);
-  const [currentFieldDefinitions, setCurrentFieldDefinitions] = useState(fieldDefinitions);
+  const [currentFieldDefinitions, setCurrentFieldDefinitions] = useState(() => sortFieldDefinitions(fieldDefinitions));
   const [editableFieldDefinitions, setEditableFieldDefinitions] = useState(allFieldDefinitions);
   const [memo, setMemo] = useState("");
   const [recordedAt, setRecordedAt] = useState(() => toLocalDateTimeInputValue(new Date()));
@@ -68,7 +74,7 @@ export function RecordsClient({
   const [fileInputKey, setFileInputKey] = useState(0);
   const [kvFields, setKvFields] = useState<Record<string, string | number | boolean>>(() =>
     Object.fromEntries(
-      fieldDefinitions.map((field) => [
+      sortFieldDefinitions(fieldDefinitions).map((field) => [
         field.key,
         field.type === "boolean" ? false : "",
       ]),
@@ -85,6 +91,10 @@ export function RecordsClient({
     return items.filter((item) => item.recordedAt.slice(0, 10) === today).length;
   }, [items]);
   const purpose = getPrimaryPurposeFocusOption(normalizePurposeFocus(activePurposeFocus));
+  const visualization = useMemo(
+    () => buildRecordVisualization(items, currentFieldDefinitions, normalizePurposeFocus(activePurposeFocus)),
+    [items, currentFieldDefinitions, activePurposeFocus],
+  );
 
   function buildRecordBody() {
     const parts = currentFieldDefinitions
@@ -202,7 +212,7 @@ export function RecordsClient({
       setFileInputKey((current) => current + 1);
       setKvFields(
         Object.fromEntries(
-          currentFieldDefinitions.map((field) => [field.key, field.type === "boolean" ? false : ""]),
+          sortFieldDefinitions(currentFieldDefinitions).map((field) => [field.key, field.type === "boolean" ? false : ""]),
         ),
       );
       setSuccessMessage("記録を追加しました。");
@@ -249,10 +259,10 @@ export function RecordsClient({
           </div>
           <p className="mt-2 text-sm text-slate-600">
             {purpose.value === "compare"
-              ? "同じ見方で残して、あとで違いを見ます。"
+              ? "今回のやり方と結果を残して、あとで試し方の違いを見ます。"
               : purpose.value === "relate"
-                ? "何と何がいっしょに起きたかを見つけるために残します。"
-                : "予想と実際を見比べられるように残します。"}
+                ? "まず何が起きているか分かるように、状況と結果を残します。"
+                : "同じやり方や見方を続けて、変化を追えるように残します。"}
           </p>
         </div>
         <div>
@@ -261,7 +271,7 @@ export function RecordsClient({
           <input type="datetime-local" value={recordedAt} onChange={(event) => setRecordedAt(event.target.value)} />
         </div>
         <div>
-          <label className="field-label">今回よく見る項目</label>
+          <label className="field-label">今回残す試し方と結果</label>
           <div className="space-y-3">
             {currentFieldDefinitions.map((field) => (
               <div key={field.id} className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -322,7 +332,7 @@ export function RecordsClient({
         </div>
         <div>
           <label className="field-label">メモ</label>
-          <p className="mb-2 text-xs text-slate-500">あとで見比べたり振り返ったりしやすいように、項目に入りにくい補足だけを短く残します。</p>
+          <p className="mb-2 text-xs text-slate-500">試したことや結果に入りきらない補足だけを短く残します。</p>
           <textarea maxLength={INPUT_LIMITS.record_memo} rows={3} value={memo} onChange={(event) => setMemo(event.target.value)} />
           <p className="mt-1 text-xs text-slate-500">{limitLabel(memo.length, INPUT_LIMITS.record_memo)}</p>
         </div>
@@ -355,7 +365,7 @@ export function RecordsClient({
         {isPending ? (
           <LoadingBlock
             title="記録を保存しています"
-            description="時間と観測項目を、この問いの流れに積み上げています。"
+            description="時間と、今回試したことや結果を、この問いの流れに積み上げています。"
           />
         ) : null}
       </Card>
@@ -365,7 +375,7 @@ export function RecordsClient({
           fields={editableFieldDefinitions}
           onSaved={({ currentFields, allFields }) => {
             setEditableFieldDefinitions(allFields);
-            setCurrentFieldDefinitions(
+            const sortedCurrentFields = sortFieldDefinitions(
               currentFields.map((field) => ({
                 id: field.id,
                 key: field.key,
@@ -380,9 +390,12 @@ export function RecordsClient({
                 parentLabel: field.derivedFromLabel,
               })),
             );
+            setCurrentFieldDefinitions(
+              sortedCurrentFields,
+            );
             setKvFields(
               Object.fromEntries(
-                currentFields.map((field) => [field.key, field.type === "boolean" ? false : ""]),
+                sortedCurrentFields.map((field) => [field.key, field.type === "boolean" ? false : ""]),
               ),
             );
           }}
@@ -390,86 +403,128 @@ export function RecordsClient({
       </Card>
 
       <Card className="md:col-span-2">
+        <SectionTitle>流れを見る</SectionTitle>
+        <p className="mt-2 text-sm text-slate-600">この問いの記録から、変化の流れか試し方ごとの違いを自動で拾って表示します。</p>
+        <div className="mt-4">
+          <RecordVisualizationCard visualization={visualization} />
+        </div>
+      </Card>
+
+      <Card className="md:col-span-2">
         <SectionTitle>記録一覧</SectionTitle>
-        <p className="mt-2 text-sm text-slate-600">新しい順に並びます。時間情報を毎回残すことで、あとで変化の順番を追えます。</p>
+        <p className="mt-2 text-sm text-slate-600">新しい順に並びます。何を試してどうだったかを、あとで順番に追いかけ直せます。</p>
         <div className="mt-4 space-y-4">
           {items.length === 0 ? (
             <p className="text-slate-600">まだ記録はありません。</p>
           ) : (
-            items.map((item) => (
-              <article key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <p className="text-xs text-slate-500">{new Date(item.recordedAt).toLocaleString("ja-JP")}</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700"
-                      onClick={() => setConfirmDeleteId((current) => (current === item.id ? "" : item.id))}
-                      disabled={deletingId === item.id}
-                    >
-                      {confirmDeleteId === item.id ? "削除確認を閉じる" : "削除"}
-                    </button>
-                  </div>
-                </div>
-                <p className="mt-2 font-medium text-slate-900">{item.body}</p>
-                {item.memo ? <p className="mt-2 text-sm text-slate-600">{item.memo}</p> : null}
-                {Object.keys(item.kvFields).length > 0 ? (
-                  <dl className="mt-3 space-y-2 rounded-xl bg-white p-3 text-sm text-slate-700">
-                    {Object.entries(item.kvFields).map(([key, value]) => {
-                      const field = editableFieldDefinitions.find((definition) => definition.key === key);
-                      return (
-                        <div key={key} className="grid grid-cols-1 gap-1 sm:grid-cols-[8rem_1fr] sm:gap-2">
-                          <dt className="text-slate-500">{field?.label || key}</dt>
-                          <dd>
-                            <p>{String(value)}</p>
-                            {field?.why ? <p className="mt-1 text-xs text-slate-500">{field.why}</p> : null}
-                            {field?.howToUse ? <p className="mt-1 text-xs text-slate-400">使い方: {field.howToUse}</p> : null}
-                          </dd>
-                        </div>
-                      );
-                    })}
-                  </dl>
-                ) : null}
-                {item.tags.length > 0 ? <p className="mt-2 text-xs text-slate-500">タグ: {item.tags.join(", ")}</p> : null}
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {item.attachments.map((attachment) => (
-                    <a
-                      key={attachment.id}
-                      href={`/${attachment.storageKey.replace(/^public\//, "")}`}
-                      target="_blank"
-                      className="rounded-full bg-white px-3 py-1 text-xs text-slate-700"
-                      rel="noreferrer"
-                    >
-                      画像を開く
-                    </a>
-                  ))}
-                </div>
-                {confirmDeleteId === item.id ? (
-                  <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
-                    <p className="text-sm font-medium text-red-800">この記録を削除しますか？</p>
-                    <p className="mt-1 text-xs text-red-700">削除すると、この一覧から消えます。誤操作を防ぐため、もう一度確認しています。</p>
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            items.map((item) => {
+              const summary = summarizeRecord(item, editableFieldDefinitions);
+
+              return (
+                <article key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  {(summary.trying.length > 0 || summary.outcome.length > 0) ? (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {summary.trying.slice(0, 2).map((entry) => (
+                        <span key={`try-${item.id}-${entry.key}`} className="rounded-full bg-sky-100 px-3 py-1 text-xs text-sky-900">
+                          {entry.label}: {entry.value}
+                        </span>
+                      ))}
+                      {summary.outcome.slice(0, 2).map((entry) => (
+                        <span key={`outcome-${item.id}-${entry.key}`} className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-900">
+                          {entry.label}: {entry.value}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <p className="text-xs text-slate-500">{new Date(item.recordedAt).toLocaleString("ja-JP")}</p>
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        className="inline-flex items-center justify-center rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-500"
-                        onClick={() => deleteRecord(item.id)}
+                        className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700"
+                        onClick={() => setConfirmDeleteId((current) => (current === item.id ? "" : item.id))}
                         disabled={deletingId === item.id}
                       >
-                        {deletingId === item.id ? "削除中..." : "削除する"}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => setConfirmDeleteId("")}
-                        disabled={deletingId === item.id}
-                      >
-                        キャンセル
+                        {confirmDeleteId === item.id ? "削除確認を閉じる" : "削除"}
                       </button>
                     </div>
                   </div>
-                ) : null}
-              </article>
-            ))
+                  <p className="mt-2 font-medium text-slate-900">{item.body}</p>
+                  {item.memo ? <p className="mt-2 text-sm text-slate-600">{item.memo}</p> : null}
+                  {Object.keys(item.kvFields).length > 0 ? (
+                    <dl className="mt-3 space-y-2 rounded-xl bg-white p-3 text-sm text-slate-700">
+                      {sortVisualizationFields(editableFieldDefinitions)
+                        .filter((field) => Object.prototype.hasOwnProperty.call(item.kvFields, field.key))
+                        .map((field) => {
+                          const value = item.kvFields[field.key];
+
+                          if (value === "" || value === null || value === undefined || value === false) {
+                            return null;
+                          }
+
+                          return (
+                            <div key={field.key} className="grid grid-cols-1 gap-1 sm:grid-cols-[8rem_1fr] sm:gap-2">
+                              <dt className="text-slate-500">{field.label}</dt>
+                              <dd>
+                                <p>{String(value)}</p>
+                                {field.why ? <p className="mt-1 text-xs text-slate-500">{field.why}</p> : null}
+                                {field.howToUse ? <p className="mt-1 text-xs text-slate-400">使い方: {field.howToUse}</p> : null}
+                              </dd>
+                            </div>
+                          );
+                        })}
+                    </dl>
+                  ) : null}
+                  {summary.context.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {summary.context.slice(0, 2).map((entry) => (
+                        <span key={`context-${item.id}-${entry.key}`} className="rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-900">
+                          {entry.label}: {entry.value}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {item.tags.length > 0 ? <p className="mt-2 text-xs text-slate-500">タグ: {item.tags.join(", ")}</p> : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {item.attachments.map((attachment) => (
+                      <a
+                        key={attachment.id}
+                        href={`/${attachment.storageKey.replace(/^public\//, "")}`}
+                        target="_blank"
+                        className="rounded-full bg-white px-3 py-1 text-xs text-slate-700"
+                        rel="noreferrer"
+                      >
+                        画像を開く
+                      </a>
+                    ))}
+                  </div>
+                  {confirmDeleteId === item.id ? (
+                    <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+                      <p className="text-sm font-medium text-red-800">この記録を削除しますか？</p>
+                      <p className="mt-1 text-xs text-red-700">削除すると、この一覧から消えます。誤操作を防ぐため、もう一度確認しています。</p>
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white hover:bg-red-500"
+                          onClick={() => deleteRecord(item.id)}
+                          disabled={deletingId === item.id}
+                        >
+                          {deletingId === item.id ? "削除中..." : "削除する"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => setConfirmDeleteId("")}
+                          disabled={deletingId === item.id}
+                        >
+                          キャンセル
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })
           )}
         </div>
       </Card>

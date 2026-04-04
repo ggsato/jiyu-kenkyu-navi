@@ -61,6 +61,28 @@ export async function POST(request: NextRequest) {
           desired_state: input.desired_state,
         })).fields;
 
+    if (normalizedPurposeFocus === "compare") {
+      const selectedCompareFields = fieldDefinitionInputs.filter(
+        (field) => field.isSelected !== false && field.role === "compare",
+      );
+
+      if (selectedCompareFields.length !== 1) {
+        return NextResponse.json(
+          { error: "『試す』の問いでは、『試し分けに使う』項目を1つだけ選んでください" },
+          { status: 400 },
+        );
+      }
+
+      const primaryCompareField = selectedCompareFields[0]!;
+
+      if (primaryCompareField.type !== "select" || (primaryCompareField.options || []).length < 2) {
+        return NextResponse.json(
+          { error: "『今回試すこと』は、選択肢を2つ以上持つ『選ぶ』項目にしてください" },
+          { status: 400 },
+        );
+      }
+    }
+
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.question.updateMany({
         where: {

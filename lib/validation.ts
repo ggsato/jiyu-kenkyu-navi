@@ -11,6 +11,7 @@ export const questionCandidateRequestSchema = z.object({
   not_yet: z.string().max(INPUT_LIMITS.not_yet, `まだできていないことは${INPUT_LIMITS.not_yet}文字までです`).optional().default(""),
   desired_state: z.string().max(INPUT_LIMITS.desired_state, `できるようになりたいことは${INPUT_LIMITS.desired_state}文字までです`).optional().default(""),
   next_curiosity_text: z.string().max(INPUT_LIMITS.next_curiosity_text, `今いちばん気になることは${INPUT_LIMITS.next_curiosity_text}文字までです`).optional().default(""),
+  record_insight_summary: z.string().max(800, "記録要約は800文字までです").optional().default(""),
 });
 
 export const questionFieldRoleSchema = z.enum(["core", "compare", "optional"]);
@@ -91,6 +92,7 @@ export const recordFieldsSuggestSchema = z.object({
   current_state: z.string().optional().default(""),
   not_yet: z.string().optional().default(""),
   desired_state: z.string().optional().default(""),
+  record_insight_summary: z.string().max(800, "記録要約は800文字までです").optional().default(""),
   existing_kv_keys: z.array(z.string()).optional().default([]),
 });
 

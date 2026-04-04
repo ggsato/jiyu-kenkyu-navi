@@ -23,6 +23,7 @@ type FieldContext = {
   current_state?: string;
   not_yet?: string;
   desired_state?: string;
+  record_insight_summary?: string;
 };
 
 export type ExistingFieldLike = FieldDefinitionInput & {
@@ -365,6 +366,7 @@ export async function buildObservationFieldInputs(
     current_state: context.current_state || "",
     not_yet: context.not_yet || "",
     desired_state: context.desired_state || "",
+    record_insight_summary: context.record_insight_summary || "",
     existing_kv_keys: existingFields.map((field) => field.key),
     existing_fields: existingFields.map((field) => ({
       key: field.key,

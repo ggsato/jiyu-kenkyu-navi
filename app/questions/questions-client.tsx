@@ -81,8 +81,8 @@ function isSameContinueWish(savedForm: QuestionFormState, continueTemplate: Ques
 function roleMeta(role: FieldCandidate["role"]) {
   if (role === "compare") {
     return {
-      title: "違いを見る",
-      description: "あとで比べたいときに足す項目",
+      title: "試し分けに使う",
+      description: "やり方や結果の違いを見たいときに足す項目",
     };
   }
 
@@ -94,8 +94,8 @@ function roleMeta(role: FieldCandidate["role"]) {
   }
 
   return {
-    title: "まず残す",
-    description: "最初の記録で持っておきたい項目",
+    title: "まず決める",
+    description: "今回どうするかを残すための基本項目",
   };
 }
 
@@ -116,18 +116,25 @@ function fieldTypeLabel(type: FieldCandidate["type"]) {
 }
 
 function fieldShortHint(field: FieldCandidate) {
-  return field.why || "何を見るかを残しておくための項目です。";
+  return field.why || "今回どうしてみたかや、どうだったかを残すための項目です。";
+}
+
+function parseOptionsText(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function candidateShapeMeta(shapeLabel: string) {
-  if (shapeLabel.includes("くらべ")) {
+  if (shapeLabel.includes("変え")) {
     return {
       className: "bg-sky-100 text-sky-900",
       label: shapeLabel,
     };
   }
 
-  if (shapeLabel.includes("小さ")) {
+  if (shapeLabel.includes("続け")) {
     return {
       className: "bg-emerald-100 text-emerald-900",
       label: shapeLabel,
@@ -204,6 +211,7 @@ export function QuestionsClient({
   forceTemplate,
   preferredFieldKeys,
   continueSummary,
+  continueRecordInsightSummary,
 }: {
   continueTemplate: QuestionFormState;
   newTemplate: QuestionFormState;
@@ -224,6 +232,7 @@ export function QuestionsClient({
     latest_reflection_unknown: string;
     latest_reflection_next_step: string;
   } | null;
+  continueRecordInsightSummary: string;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"continue" | "new">(initialMode);
@@ -542,7 +551,10 @@ export function QuestionsClient({
       const response = await fetch("/api/ai/question-candidates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          record_insight_summary: mode === "continue" ? continueRecordInsightSummary : "",
+        }),
       });
 
       const data = (await response.json()) as QuestionCandidatesResponse;
@@ -551,7 +563,7 @@ export function QuestionsClient({
         : Array.isArray(data.questions)
           ? data.questions.map((question) => ({
               text: question,
-              shape_label: "小さくする",
+              shape_label: "試し方を変えてみる",
               purpose_hint: "compare",
               why_this_question: "まずは問いに答える材料を集めるため",
             }))
@@ -582,6 +594,7 @@ export function QuestionsClient({
           current_state: form.current_state,
           not_yet: form.not_yet,
           desired_state: form.desired_state,
+          record_insight_summary: mode === "continue" ? continueRecordInsightSummary : "",
           existing_kv_keys: [],
         }),
       });
@@ -593,12 +606,20 @@ export function QuestionsClient({
       const mergedPreferredKeys = mode === "continue"
         ? Array.from(new Set([...aiPreferredKeys, ...preferredFieldKeys]))
         : aiPreferredKeys;
+      const compareFieldKeys = purposeFocus === "compare"
+        ? nextFieldCandidates.filter((field) => field.role === "compare").map((field) => field.key)
+        : [];
       setFieldCandidates(nextFieldCandidates);
       setSplitSuggestedKeys(nextSplitSuggestedKeys);
       setSelectedFieldKeys(
-        getDefaultSelectedFieldKeys(
-          nextFieldCandidates,
-          mergedPreferredKeys,
+        Array.from(
+          new Set([
+            ...getDefaultSelectedFieldKeys(
+              nextFieldCandidates,
+              mergedPreferredKeys,
+            ),
+            ...compareFieldKeys,
+          ]),
         ),
       );
     });
@@ -842,6 +863,19 @@ export function QuestionsClient({
   };
   const selectedFields = fieldCandidates.filter((field) => selectedFieldKeys.includes(field.key));
   const inactiveFields = fieldCandidates.filter((field) => !selectedFieldKeys.includes(field.key));
+  const selectedCompareFields = selectedFields.filter((field) => field.role === "compare");
+  const primaryCompareField = selectedCompareFields[0] || null;
+  const compareSetupError = form.purpose_focus !== "compare"
+    ? ""
+    : selectedCompareFields.length === 0
+      ? "『試す』の問いでは、今回試すことを1つ決めてください。"
+      : selectedCompareFields.length > 1
+        ? "『試す』の問いでは、『試し分けに使う』項目を1つにしてください。"
+        : primaryCompareField.type !== "select"
+          ? "『今回試すこと』は、選択肢から選べる項目にしてください。"
+          : primaryCompareField.options.length < 2
+            ? "『今回試すこと』には、選択肢を2つ以上入れてください。"
+            : "";
   const activeStep = isSaving || selectedFieldKeys.length > 0
     ? 5
     : isLoadingFields || form.question_text
@@ -918,6 +952,71 @@ export function QuestionsClient({
               />
               <p className="mt-1 text-xs text-slate-500">主操作は選ぶことです。名前だけ少し直したいときに使います。</p>
             </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <label className="field-label">役割</label>
+                <select
+                  value={field.role}
+                  onChange={(event) =>
+                    setFieldCandidates((current) =>
+                      current.map((candidate) =>
+                        candidate.key === field.key
+                          ? { ...candidate, role: event.target.value as FieldCandidate["role"] }
+                          : candidate,
+                      ),
+                    )
+                  }
+                >
+                  <option value="core">まず決める</option>
+                  <option value="compare">試し分けに使う</option>
+                  <option value="optional">気になったら足す</option>
+                </select>
+              </div>
+              <div>
+                <label className="field-label">入力の種類</label>
+                <select
+                  value={field.type}
+                  onChange={(event) =>
+                    setFieldCandidates((current) =>
+                      current.map((candidate) =>
+                        candidate.key === field.key
+                          ? {
+                              ...candidate,
+                              type: event.target.value as FieldCandidate["type"],
+                              options: event.target.value === "select" ? candidate.options : [],
+                            }
+                          : candidate,
+                      ),
+                    )
+                  }
+                >
+                  <option value="text">短く書く</option>
+                  <option value="select">選ぶ</option>
+                  <option value="number">数で入れる</option>
+                  <option value="boolean">はい / いいえ</option>
+                </select>
+              </div>
+            </div>
+            {field.type === "select" ? (
+              <div>
+                <label className="field-label">選択肢</label>
+                <input
+                  type="text"
+                  value={field.options.join(", ")}
+                  onChange={(event) =>
+                    setFieldCandidates((current) =>
+                      current.map((candidate) =>
+                        candidate.key === field.key
+                          ? { ...candidate, options: parseOptionsText(event.target.value) }
+                          : candidate,
+                      ),
+                    )
+                  }
+                  placeholder="A, B"
+                />
+                <p className="mt-1 text-xs text-slate-500">カンマ区切りで入れます。</p>
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2 text-xs text-slate-600">
               {field.derived_from_key ? (
                 <span>
@@ -1145,7 +1244,7 @@ export function QuestionsClient({
           </div>
           <div>
             <label className="field-label">まだできていないこと</label>
-            <p className={`mb-2 rounded-2xl px-3 py-2 text-xs ${helperTone("tip")}`}>できていないことをそのまま書くと、比べる問いや観測項目につながります。</p>
+            <p className={`mb-2 rounded-2xl px-3 py-2 text-xs ${helperTone("tip")}`}>できていないことをそのまま書くと、次に何を見たり試したりするかが出やすくなります。</p>
             <textarea maxLength={INPUT_LIMITS.not_yet} rows={3} value={form.not_yet} onChange={(event) => updateField("not_yet", event.target.value)} />
             <p className="mt-1 text-xs text-slate-500">{limitLabel(form.not_yet.length, INPUT_LIMITS.not_yet)}</p>
           </div>
@@ -1179,7 +1278,7 @@ export function QuestionsClient({
           <SectionTitle>4. 問いを1つ選ぶ</SectionTitle>
           {form.question_text ? <Pill>{getPrimaryPurposeFocusOption(form.purpose_focus).label}</Pill> : null}
         </div>
-        <p className="text-sm text-slate-600">本人の気になり方に近いものを選び、その問いでどこを見ていくかを決めます。</p>
+        <p className="text-sm text-slate-600">本人の気になり方に近いものを選び、その問いで何を見るか、何を試すか、何を続けるかを決めます。</p>
         <div className="space-y-3">
           {candidates.length === 0 ? (
             <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">上の内容から候補を作ります。</p>
@@ -1223,10 +1322,10 @@ export function QuestionsClient({
       >
         <section ref={fieldsSectionRef} className="space-y-4 scroll-mt-24">
         <div className="flex items-center justify-between">
-          <SectionTitle>5. 見る項目を整える</SectionTitle>
+          <SectionTitle>5. 試し方と見方を整える</SectionTitle>
           {selectedFieldKeys.length > 0 ? <Pill>{selectedFieldKeys.length}項目を選択中</Pill> : null}
         </div>
-        <p className="text-sm text-slate-600">この願いを見る項目のうち、今回の問いで使うものを決めます。AI の初期提案をそのまま使ってもよく、必要なら少しだけ直せます。</p>
+        <p className="text-sm text-slate-600">この願いで使える試し方と見方の棚から、今回の問いで使うものを決めます。AI の初期提案をそのまま使ってもよく、必要なら少しだけ直せます。</p>
         {fieldCandidates.length > 0 ? (
           <div className="grid gap-3 md:grid-cols-3">
             {(["core", "compare", "optional"] as const).map((role) => {
@@ -1243,22 +1342,36 @@ export function QuestionsClient({
         ) : null}
         {splitSuggestedKeys.length > 0 ? (
           <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            AI は、{splitSuggestedKeys.map((key) => fieldCandidates.find((field) => field.key === key)?.label || key).join(" / ")} を分けて見ると、ちがいが見つけやすいと提案しています。
+            AI は、{splitSuggestedKeys.map((key) => fieldCandidates.find((field) => field.key === key)?.label || key).join(" / ")} を分けて残すと、試し方や結果の違いが見えやすいと提案しています。
           </p>
+        ) : null}
+        {form.purpose_focus === "compare" && primaryCompareField ? (
+          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+            <p className="text-sm font-medium text-slate-900">今回試すこと</p>
+            <p className="mt-1 text-sm text-slate-700">{primaryCompareField.label}</p>
+            <p className="mt-2 text-xs text-slate-600">
+              {primaryCompareField.options.length > 0
+                ? `選択肢: ${primaryCompareField.options.join(" / ")}`
+                : "選択肢を入れると、何を試し分けるかがはっきりします。"}
+            </p>
+          </div>
+        ) : null}
+        {form.purpose_focus === "compare" && compareSetupError ? (
+          <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{compareSetupError}</p>
         ) : null}
         {isLoadingFields ? (
           <LoadingBlock
-            title="見る項目を整えています"
-            description="まず残す項目、違いを見る項目、あとで足す項目に分けて候補をまとめています。"
+            title="試し方と見方を整えています"
+            description="まず決める項目、試し分けに使う項目、あとで足す項目に分けて候補をまとめています。"
           />
         ) : fieldCandidates.length === 0 ? (
-          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">問いを選ぶと、今まで見てきた項目と今回足す候補が出ます。</p>
+          <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">問いを選ぶと、この願いで使ってきた棚と、今回足す候補が出ます。</p>
         ) : (
           <div className="space-y-4">
             <section className="space-y-3">
               <div>
-                <p className="text-sm font-medium text-slate-900">今回よく見る項目</p>
-                <p className="text-xs text-slate-500">今の問いで特によく見る項目です。</p>
+                <p className="text-sm font-medium text-slate-900">今回使う試し方と見方</p>
+                <p className="text-xs text-slate-500">今の問いで、何を試してどう見ていくかを決める項目です。</p>
               </div>
               <div className="space-y-3">
                 {selectedFields.length > 0 ? selectedFields.map(renderFieldCard) : <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">使う項目を選んでください。</p>}
@@ -1266,8 +1379,8 @@ export function QuestionsClient({
             </section>
             <section className="space-y-3">
               <div>
-                <p className="text-sm font-medium text-slate-900">今回はお休みする項目</p>
-                <p className="text-xs text-slate-500">この願いの見方には残しつつ、今回は外しておく項目です。</p>
+                <p className="text-sm font-medium text-slate-900">今回は休ませておく項目</p>
+                <p className="text-xs text-slate-500">この願いの棚には残しつつ、今回は使わない項目です。</p>
               </div>
               <div className="space-y-3">
                 {inactiveFields.length > 0 ? inactiveFields.map(renderFieldCard) : <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">すべての項目を今回使います。</p>}
@@ -1280,8 +1393,8 @@ export function QuestionsClient({
             {!isAddingCustomField ? (
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-sm font-medium text-slate-900">この項目も見たい</p>
-                  <p className="text-xs text-slate-500">たとえば 対戦相手 / ステージ / 時間帯 のような、見たい項目を1件足せます。</p>
+                  <p className="text-sm font-medium text-slate-900">この試し方や見方も足したい</p>
+                  <p className="text-xs text-slate-500">たとえば 相手 / 場面 / 時間帯 のような、今回残したい項目を1件足せます。</p>
                 </div>
                 <button type="button" className="btn-secondary w-full md:w-auto" onClick={() => setIsAddingCustomField(true)}>
                   自分で項目を足す
@@ -1292,10 +1405,10 @@ export function QuestionsClient({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-slate-900">
-                      {customFieldForm.derivedFromKey ? "細かい項目を追加する" : "見たい項目を追加する"}
+                      {customFieldForm.derivedFromKey ? "細かい項目を追加する" : "残したい項目を追加する"}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {customFieldForm.derivedFromKey ? "選んだ項目を細かく見るための子項目を足します。" : "この願いで見続けたいことを1件だけ足します。"}
+                      {customFieldForm.derivedFromKey ? "選んだ項目をより細かく残すための子項目を足します。" : "この願いで試したことや結果を残す項目を1件だけ足します。"}
                     </p>
                   </div>
                   <button
@@ -1342,7 +1455,7 @@ export function QuestionsClient({
                       type="text"
                       value={customFieldForm.why}
                       onChange={(event) => setCustomFieldForm((current) => ({ ...current, why: event.target.value }))}
-                      placeholder="相手による違いを見るため"
+                      placeholder="どのやり方を試したか残すため"
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -1351,7 +1464,7 @@ export function QuestionsClient({
                       type="text"
                       value={customFieldForm.howToUse}
                       onChange={(event) => setCustomFieldForm((current) => ({ ...current, howToUse: event.target.value }))}
-                      placeholder="相手ごとに違いがあるか見比べる"
+                      placeholder="試し方ごとに見返す"
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -1405,7 +1518,7 @@ export function QuestionsClient({
           type="button"
           className="btn-primary w-full scroll-mt-24"
           onClick={saveQuestion}
-          disabled={isSaving || !form.question_text || selectedFieldKeys.length === 0}
+          disabled={isSaving || !form.question_text || selectedFieldKeys.length === 0 || Boolean(compareSetupError)}
         >
           {isSaving ? "保存中..." : "6. この問いで始める"}
         </button>

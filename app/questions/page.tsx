@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { QuestionsClient } from "./questions-client";
 import { getCurrentUserId } from "@/lib/current-user";
 import { PageShell } from "@/components/ui";
+import { buildRecordInsightSummary } from "@/lib/record-visualization";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,10 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
     },
     include: {
       wish: true,
+      records: {
+        orderBy: { recordedAt: "desc" },
+        take: 20,
+      },
       reflections: {
         orderBy: { reflectionDate: "desc" },
         take: 1,
@@ -38,6 +43,23 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
   });
 
   const latestReflection = activeQuestion?.reflections[0] || null;
+  const continueRecordInsightSummary = activeQuestion
+    ? buildRecordInsightSummary(
+        activeQuestion.records.map((record) => ({
+          recordedAt: record.recordedAt.toISOString(),
+          kvFields: (record.kvFields as Record<string, unknown>) || {},
+        })),
+        activeQuestion.observationFocuses.map((focus) => ({
+          key: focus.fieldDefinition.key,
+          label: focus.fieldDefinition.label,
+          type: focus.fieldDefinition.type,
+          unit: focus.fieldDefinition.unit,
+          role: focus.fieldDefinition.role,
+          why: focus.fieldDefinition.why,
+        })),
+        activeQuestion.purposeFocus,
+      )
+    : "";
 
   const continueTemplate = activeQuestion
     ? {
@@ -106,6 +128,7 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
               }
             : null
         }
+        continueRecordInsightSummary={continueRecordInsightSummary}
       />
     </PageShell>
   );

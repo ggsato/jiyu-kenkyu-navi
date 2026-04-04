@@ -8,14 +8,14 @@ export const dynamic = "force-dynamic";
 
 function roleLabel(role: "core" | "compare" | "optional") {
   if (role === "compare") {
-    return "違いを見る";
+    return "試し分けに使う";
   }
 
   if (role === "optional") {
     return "気になったら足す";
   }
 
-  return "まず残す";
+  return "まず決める";
 }
 
 function fieldTypeLabel(type: "text" | "number" | "boolean" | "select") {
@@ -94,9 +94,9 @@ export default async function ObservationsPage() {
     return (
       <PageShell>
         <Card className="bg-[linear-gradient(135deg,#fff7d6,#ffffff)]">
-          <p className="mb-3 text-sm text-slate-600">見方の地図</p>
-          <h1 className="text-3xl font-bold text-slate-900">まだ見方の地図はありません</h1>
-          <p className="mt-3 max-w-2xl text-slate-700">最初の問いを作ると、この願いで見ていく項目のまとまりがここにたまっていきます。</p>
+          <p className="mb-3 text-sm text-slate-600">試し方と見方の地図</p>
+          <h1 className="text-3xl font-bold text-slate-900">まだ試し方と見方の地図はありません</h1>
+          <p className="mt-3 max-w-2xl text-slate-700">最初の問いを作ると、この願いで使っていく試し方や見方の棚がここにたまっていきます。</p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Link href="/questions" className="btn-primary">
               問いを作る
@@ -113,10 +113,10 @@ export default async function ObservationsPage() {
   return (
     <PageShell>
       <Card className="bg-[linear-gradient(135deg,#fff7d6,#ffffff)]">
-        <p className="mb-3 text-sm text-slate-600">見方の地図</p>
+        <p className="mb-3 text-sm text-slate-600">試し方と見方の地図</p>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-3xl">
-            <h1 className="text-3xl font-bold text-slate-900">この願いの見方の地図</h1>
+            <h1 className="text-3xl font-bold text-slate-900">この願いの試し方と見方の地図</h1>
             <p className="mt-3 text-slate-700">願い: {payload.wishText}</p>
             <p className="mt-2 text-sm text-slate-700">今の問い: {payload.activeQuestionText}</p>
           </div>
@@ -133,26 +133,26 @@ export default async function ObservationsPage() {
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
-          <SectionTitle>全項目</SectionTitle>
+          <SectionTitle>全体の棚</SectionTitle>
           <p className="mt-2 text-4xl font-bold text-slate-900">{payload.stats.total}</p>
         </Card>
         <Card>
-          <SectionTitle>親項目</SectionTitle>
+          <SectionTitle>親の棚</SectionTitle>
           <p className="mt-2 text-4xl font-bold text-slate-900">{payload.stats.roots}</p>
         </Card>
         <Card>
-          <SectionTitle>細分化項目</SectionTitle>
+          <SectionTitle>細かい棚</SectionTitle>
           <p className="mt-2 text-4xl font-bold text-slate-900">{payload.stats.split}</p>
         </Card>
         <Card>
-          <SectionTitle>今使う項目</SectionTitle>
+          <SectionTitle>今使う棚</SectionTitle>
           <p className="mt-2 text-4xl font-bold text-slate-900">{payload.stats.current}</p>
         </Card>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <SectionTitle>最近増えた項目</SectionTitle>
+          <SectionTitle>最近増えた棚</SectionTitle>
           <div className="mt-3 flex flex-wrap gap-2">
             {payload.recentAdded.length > 0 ? (
               payload.recentAdded.map((label) => (
@@ -166,7 +166,7 @@ export default async function ObservationsPage() {
           </div>
         </Card>
         <Card>
-          <SectionTitle>今はお休みしている項目</SectionTitle>
+          <SectionTitle>今は休ませている棚</SectionTitle>
           <div className="mt-3 flex flex-wrap gap-2">
             {payload.resting.length > 0 ? (
               payload.resting.map((label) => (
@@ -184,9 +184,9 @@ export default async function ObservationsPage() {
       <Card>
         <div className="flex items-center justify-between gap-3">
           <SectionTitle>つながり</SectionTitle>
-          <Pill>この願いで見ていく項目</Pill>
+          <Pill>この願いで使う試し方と見方</Pill>
         </div>
-        <p className="mt-3 text-sm text-slate-700">大きい項目から細かい項目へのつながりをたどれます。今の問いで使う項目は強調表示されます。</p>
+        <p className="mt-3 text-sm text-slate-700">大きい棚から細かい棚へのつながりをたどれます。今の問いで使う棚は強調表示されます。</p>
         <div className="mt-4">
           <ObservationTree nodes={payload.tree} />
         </div>

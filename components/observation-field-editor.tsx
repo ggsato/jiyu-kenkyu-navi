@@ -172,7 +172,7 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "記録項目を更新できませんでした");
+        setError(data.error || "項目を更新できませんでした");
         return;
       }
 
@@ -181,7 +181,7 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
         allFields: (data.all_fields || []) as EditableObservationField[],
       };
       setDraftFields(payload.allFields);
-      setSuccessMessage("見方を更新しました。");
+      setSuccessMessage("試し方と見方を更新しました。");
       onSaved(payload);
     });
   }
@@ -189,13 +189,13 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <SectionTitle>見方を育てる</SectionTitle>
+        <SectionTitle>試し方と見方を育てる</SectionTitle>
         <button type="button" className="btn-secondary" onClick={() => setIsAdding((current) => !current)}>
           {isAdding ? "追加を閉じる" : "項目を足す"}
         </button>
       </div>
       <p className="text-sm text-slate-700">
-        問いはそのままにして、今見る項目や名前を育てられます。保存済みの記録本文は書き換えず、項目の見方だけを更新します。
+        問いはそのままにして、今回使う試し方や見方の棚を育てられます。保存済みの記録本文は書き換えず、項目の意味づけだけを更新します。
       </p>
       <p className="text-sm text-slate-600">主操作は「この問いで使う」を選ぶことです。役割や選択肢などの詳細は必要なときだけ開いて直します。</p>
 
@@ -227,8 +227,8 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
                 <div>
                   <label className="field-label">役割</label>
                   <select value={field.role} onChange={(event) => updateField(field.key, { role: event.target.value as EditableObservationField["role"] })}>
-                    <option value="core">まず残す</option>
-                    <option value="compare">違いを見る</option>
+                    <option value="core">まず決める</option>
+                    <option value="compare">試し分けに使う</option>
                     <option value="optional">気になったら足す</option>
                   </select>
                 </div>
@@ -282,8 +282,8 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
             <div>
               <label className="field-label">役割</label>
               <select value={customField.role} onChange={(event) => setCustomField((current) => ({ ...current, role: event.target.value as EditableObservationField["role"] }))}>
-                <option value="core">まず残す</option>
-                <option value="compare">違いを見る</option>
+                <option value="core">まず決める</option>
+                <option value="compare">試し分けに使う</option>
                 <option value="optional">気になったら足す</option>
               </select>
             </div>
@@ -326,11 +326,11 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
       {error ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
       {successMessage ? <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{successMessage}</p> : null}
       <button type="button" className="btn-primary w-full md:w-auto" onClick={saveFields} disabled={isPending}>
-        {isPending ? "更新中..." : "見方を更新する"}
+        {isPending ? "更新中..." : "試し方と見方を更新する"}
       </button>
       {isPending ? (
         <LoadingBlock
-          title="見方を更新しています"
+          title="試し方と見方を更新しています"
           description="この問いで使う項目と名前を、保存済みの記録を保ったまま更新しています。"
         />
       ) : null}

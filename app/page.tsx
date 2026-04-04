@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { buildHomePayload } from "@/lib/home";
+import { RecordVisualizationCard } from "@/components/record-visualization";
 import { Card, PageShell, SectionTitle } from "@/components/ui";
 import { getCurrentUserId } from "@/lib/current-user";
 import { WishSwitcher } from "@/components/wish-switcher";
@@ -93,6 +94,13 @@ export default async function HomePage({
             </div>
 
             <div className="rounded-3xl bg-white/70 p-4 shadow-sm">
+              <p className="text-sm font-semibold text-slate-900">流れの見え方</p>
+              <div className="mt-3">
+                <RecordVisualizationCard visualization={home.record_visualization} />
+              </div>
+            </div>
+
+            <div className="rounded-3xl bg-white/70 p-4 shadow-sm">
               <p className="text-sm font-semibold text-slate-900">最近の記録</p>
               <div className="mt-2 space-y-2">
                 {home.recent_records.length === 0 ? (
@@ -112,14 +120,14 @@ export default async function HomePage({
       </Card>
 
       <details className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <summary className="cursor-pointer text-lg font-semibold text-slate-900">今見ている項目を見る</summary>
-        <p className="mt-3 text-sm text-slate-600">今見ている項目や、お休み中の項目は必要なときにここから見返せます。</p>
+        <summary className="cursor-pointer text-lg font-semibold text-slate-900">今使っている試し方と見方を見る</summary>
+        <p className="mt-3 text-sm text-slate-600">今使っている棚や、お休み中の棚は必要なときにここから見返せます。</p>
         <div className="mt-4 grid gap-4 md:grid-cols-3">
           <Card>
             <div className="flex items-center justify-between gap-3">
-              <SectionTitle>今見ている項目</SectionTitle>
+              <SectionTitle>今使っている試し方</SectionTitle>
               <Link href="/observations" className="text-sm font-medium text-amber-900 underline-offset-2 hover:underline">
-                見方の地図を見る
+                試し方と見方の地図を見る
               </Link>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -135,7 +143,7 @@ export default async function HomePage({
             </div>
           </Card>
           <Card>
-            <SectionTitle>よく見る項目</SectionTitle>
+            <SectionTitle>よく使う試し方</SectionTitle>
             <div className="mt-3 space-y-2">
               {home.observation_summary.frequent.length > 0 ? (
                 home.observation_summary.frequent.map((item) => (
@@ -149,7 +157,7 @@ export default async function HomePage({
             </div>
           </Card>
           <Card>
-            <SectionTitle>今はお休みしている項目</SectionTitle>
+            <SectionTitle>今は休ませている項目</SectionTitle>
             <div className="mt-3 space-y-2">
               {home.observation_summary.resting.length > 0 ? (
                 home.observation_summary.resting.map((label) => (
@@ -162,7 +170,7 @@ export default async function HomePage({
               )}
             </div>
             {home.observation_summary.recentAdded.length > 0 ? (
-              <p className="mt-4 text-xs text-slate-600">最近ふえた項目: {home.observation_summary.recentAdded.join(" / ")}</p>
+              <p className="mt-4 text-xs text-slate-600">最近ふえた棚: {home.observation_summary.recentAdded.join(" / ")}</p>
             ) : null}
           </Card>
         </div>

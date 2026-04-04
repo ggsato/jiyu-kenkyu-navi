@@ -52,7 +52,7 @@ export default async function RecordsPage() {
     <PageShell>
       <Card>
         <SectionTitle>記録</SectionTitle>
-        <p className="mt-2 text-sm text-slate-600">今何をしているかを残し、同じ願いの観測を積み上げながら次に何を見るとよいかを見つけます。</p>
+        <p className="mt-2 text-sm text-slate-600">今回どうしてみたかと、その結果を残しながら、この願いで次に何を試すとよいかを見つけます。</p>
         <p className="mt-3 text-base font-medium text-slate-900">{activeQuestion?.text || "まずは問いを作ろう"}</p>
       </Card>
       <RecordsClient
