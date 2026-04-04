@@ -199,6 +199,7 @@ model QuestionObservationFocus {
   questionId        String
   fieldDefinitionId String
   isSelected        Boolean                    @default(true)
+  isPrimaryMetric   Boolean                    @default(false)
   sortOrder         Int                        @default(0)
   createdAt         DateTime                   @default(now())
   updatedAt         DateTime                   @updatedAt

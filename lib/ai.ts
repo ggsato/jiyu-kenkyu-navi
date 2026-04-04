@@ -76,6 +76,7 @@ async function createJson<T>(model: string, instructions: string, input: unknown
 
 export async function generateQuestionCandidates(input: Record<string, unknown>) {
   const nextCuriosityText = String(input.next_curiosity_text || "").trim();
+  const recordInsightSummary = String(input.record_insight_summary || "").trim();
   const result = await createJson(
     questionModel,
     [
@@ -87,13 +88,23 @@ export async function generateQuestionCandidates(input: Record<string, unknown>)
       nextCuriosityText
         ? "本人が書いた言葉がある場合、AIが勝手に別の関心へ飛ばさず、近い形で整えてください。"
         : "入力に沿って、小さく試せる問いにしてください。",
+      "候補には、できるだけ『見る』『試す』『続ける』の違いがにじむようにしてください。",
+      "『見る』はまず何が起きているかをつかむ問いです。",
+      "『試す』はやり方の違いを試し分ける問いです。",
+      "『続ける』はひとつのやり方や見方を続けて確かめる問いです。",
+      recordInsightSummary
+        ? `最近の記録を日単位で圧縮した要約: ${recordInsightSummary}`
+        : "",
+      recordInsightSummary
+        ? "最近の流れがある場合は、それを踏まえて次の一歩になる問いを出してください。すでに十分見えていることの言い換えは避けてください。"
+        : "",
       "",
       "必ず次の JSON だけを返してください。",
       "{",
       '  "candidates": [',
       "    {",
       '      "text": "問い文",',
-      '      "shape_label": "そのまま進める|小さくする|くらべやすくする",',
+      '      "shape_label": "そのまま見てみる|試し方を変えてみる|続けて確かめる",',
       '      "purpose_hint": "compare|relate|predict",',
       '      "why_this_question": "この問いがよい理由"',
       "    }",
@@ -107,8 +118,9 @@ export async function generateQuestionCandidates(input: Record<string, unknown>)
       "- why_this_question は50文字以内",
       "- 各要素に text, shape_label, purpose_hint, why_this_question を必ず含める",
       "- purpose_hint は compare, relate, predict のいずれかにする",
-      "- ただ残すための問いではなく、くらべる・つなげる・たしかめるのどれかが見える問いにする",
-      nextCuriosityText ? "- 3件の役割は、できるだけ『そのまま進める』『小さくする』『くらべやすくする』で分ける" : "- 役割が重なりすぎないようにする",
+      "- ただ残すための問いではなく、見る・試す・続けるのどれかが見える問いにする",
+      "- purpose_hint は、見るなら relate、試すなら compare、続けるなら predict を使う",
+      nextCuriosityText ? "- 3件の役割は、できるだけ『そのまま見てみる』『試し方を変えてみる』『続けて確かめる』で分ける" : "- 役割が重なりすぎないようにする",
       "- JSON 以外の説明文は書かない",
       "- Markdown のコードフェンスは使わない",
     ].join("\n"),
@@ -117,7 +129,7 @@ export async function generateQuestionCandidates(input: Record<string, unknown>)
       candidates: [
         {
           text: QUESTION_CANDIDATE_FALLBACK,
-          shape_label: "小さくする",
+          shape_label: "試し方を変えてみる",
           purpose_hint: "compare",
           why_this_question: "まずは小さく記録を始めるため",
         },
@@ -131,7 +143,7 @@ export async function generateQuestionCandidates(input: Record<string, unknown>)
     return {
       candidates: maybeQuestions.slice(0, 3).map((text) => ({
         text,
-        shape_label: "小さくする",
+        shape_label: "試し方を変えてみる",
         purpose_hint: "compare",
         why_this_question: "まずは小さく記録を始めるため",
       })),
@@ -149,6 +161,7 @@ export async function generateQuestionCandidates(input: Record<string, unknown>)
 
 export async function generateRecordFieldSuggestions(input: Record<string, unknown>) {
   const normalizedPurposeFocus = normalizePurposeFocus(String(input.purpose_focus || "compare"));
+  const recordInsightSummary = String(input.record_insight_summary || "").trim();
   const existingKeys = Array.isArray(input.existing_kv_keys)
     ? (input.existing_kv_keys as unknown[]).map((key) => String(key)).filter(Boolean)
     : [];
@@ -171,19 +184,20 @@ export async function generateRecordFieldSuggestions(input: Record<string, unkno
     recordFieldsModel,
     [
       "あなたは記録フォーム設計者です。",
-      "次の入力から、既存の観測項目のどこに注目するかと、必要なら追加する項目を提案してください。",
+      "次の入力から、その願いに向かって今回どんな試し方や見方を使うか、そして何を残すと次の一歩につながるかを提案してください。",
       "特定の題材に寄せすぎず、どんな自由研究テーマでも使える考え方で作ってください。",
       "ただし question_text と wish_text に書かれていない具体物を勝手に足してはいけません。",
       "項目と選択肢は、入力された問いと願いの文脈に直接対応している必要があります。",
       existingFields.length > 0
-        ? `この願いの既存観測項目は ${existingFields.map((field) => `${field.key}:${field.label}:${field.type}${field.unit ? `:${field.unit}` : ""}${field.options.length > 0 ? `:${field.options.join("/")}` : ""}:selected=${field.selected_count}:presented=${field.presented_count}:current=${field.is_currently_selected ? "yes" : "no"}`).join(", ")} です。まずこの中で今回注目する項目を選び、足りないときだけ新しい項目を提案してください。`
-        : "まだ既存の観測項目はありません。長く使えそうな観測軸を優先してください。",
+        ? `この願いの既存項目は ${existingFields.map((field) => `${field.key}:${field.label}:${field.type}${field.unit ? `:${field.unit}` : ""}${field.options.length > 0 ? `:${field.options.join("/")}` : ""}:selected=${field.selected_count}:presented=${field.presented_count}:current=${field.is_currently_selected ? "yes" : "no"}`).join(", ")} です。まずこの中で今回使う項目を選び、足りないときだけ新しい項目を提案してください。`
+        : "まだ既存の項目はありません。長く使えそうな試し方や見方の軸を優先してください。",
       existingFields.length > 0
         ? "同じ意味の項目を出し直すのではなく、既存項目の unit/type/options/how_to_use をできるだけ引き継いでください。長く使われている項目ほど優先してください。"
         : "",
       existingFields.length > 0
         ? "必要なら、既存項目のうちどれを細かく分けるとよいかも提案してください。"
         : "",
+      "項目は、できるだけ『今回何を試したか』『どんな状況だったか』『結果どうだったか』が残るようにしてください。",
       "問いに答えるために本当に必要な観測値だけを出してください。",
       "あとで比べたり数えたりしやすいように、自由入力より select と boolean を優先してください。",
       "text は本当に自由記述が必要なときだけ使ってください。",
@@ -191,10 +205,16 @@ export async function generateRecordFieldSuggestions(input: Record<string, unkno
       "",
       `この問いの目的は ${normalizedPurposeFocus} です。`,
       normalizedPurposeFocus === "compare"
-        ? "違いが見えるように、条件や結果をそろえて比べられる項目を優先してください。"
+        ? "やり方の違いを試し分けられるように、今回何を試し分けるかが一目で分かる主項目を1つ作り、その項目はできるだけ select で選択肢も入れてください。"
         : normalizedPurposeFocus === "relate"
-          ? "何と何がいっしょに起きるかが見えるように、状況と結果をつなげられる項目を優先してください。"
-          : "予想と実際を見比べられるように、見立てを確かめるための項目を優先してください。",
+          ? "まず何が起きているかをつかめるように、状況と結果の流れが分かる項目を優先してください。"
+          : "ひとつのやり方や見方を続けて確かめられるように、同じ軸で変化を追える項目を優先してください。",
+      recordInsightSummary
+        ? `最近の記録を日単位で圧縮した要約: ${recordInsightSummary}`
+        : "",
+      recordInsightSummary
+        ? "最近の流れだけで足りないところを埋める項目を優先し、同じ意味の項目を増やしすぎないでください。"
+        : "",
       "",
       "",
       "必ず次の JSON だけを返してください。",
@@ -234,8 +254,10 @@ export async function generateRecordFieldSuggestions(input: Record<string, unkno
       "- 主観ではなく、目で見たり数えたり選んだりできる独立した観測値にする",
       "- 抽象語や体感語ではなく、何を見れば答えられるかがすぐ分かる項目にする",
       "- role は core, compare, optional のいずれかにする",
-      "- core は『まず残す』項目で 1〜3 件まで",
-      "- compare は『違いを見る』項目で 0〜3 件まで",
+      "- core は『まず決める』項目で 1〜3 件まで",
+      "- compare は『試し分けに使う』項目で 0〜3 件まで",
+      normalizedPurposeFocus === "compare" ? "- compare は基本的に 1 件にし、その1件で今回何を試すかが分かるようにする" : "",
+      normalizedPurposeFocus === "compare" ? "- compare の項目は、できるだけ type=select にして options を2件以上入れる" : "",
       "- optional は『気になったら足す』項目で 0〜4 件まで",
       "- why は40文字以内で、その項目を見る理由を短く書く",
       "- how_to_use は40文字以内で、あとでどう比べたり見返したりするかを書く",
@@ -259,9 +281,9 @@ export async function generateRecordFieldSuggestions(input: Record<string, unkno
       selected_existing_keys: existingKeys.slice(0, 2),
       split_existing_keys: [],
       suggested_fields: [
-        { key: "scene", label: "場面", type: "select", unit: null, options: ["はじめ", "途中", "おわり"], role: "core", why: "どこで違いが出るかを見るため", how_to_use: "同じ場面どうしで見比べるために使う", is_default: true, derived_from_key: null },
-        { key: "what_happened", label: "何が起きた", type: "text", unit: null, options: [], role: "core", why: "その回のようすを短く残すため", how_to_use: "違いが出た回を読み返すときに使う", is_default: true, derived_from_key: null },
-        { key: "difference_hint", label: "気になる違い", type: "boolean", unit: null, options: [], role: "compare", why: "あとで見比べたい回を見つけるため", how_to_use: "気になる回に印を付けてあとで集める", is_default: false, derived_from_key: null },
+        { key: "trying", label: "試すこと", type: "select", unit: null, options: ["やり方A", "やり方B"], role: "compare", why: "今回何を試したかを分けるため", how_to_use: "試すことごとに見返す", is_default: false, derived_from_key: null },
+        { key: "scene", label: "場面", type: "select", unit: null, options: ["はじめ", "途中", "おわり"], role: "core", why: "どんな状況だったか残すため", how_to_use: "近い場面どうしで見返す", is_default: true, derived_from_key: null },
+        { key: "what_happened", label: "結果", type: "text", unit: null, options: [], role: "core", why: "どうだったかを短く残すため", how_to_use: "試すこととの違いを見返す", is_default: true, derived_from_key: null },
       ],
       fallback_message: RECORD_FIELD_FALLBACK,
     },
@@ -305,9 +327,9 @@ export async function generateRecordFieldSuggestions(input: Record<string, unkno
     selected_existing_keys: existingKeys.slice(0, 2),
     split_existing_keys: [],
     suggested_fields: [
-      { key: "scene", label: "場面", type: "select", unit: null, options: ["はじめ", "途中", "おわり"], role: "core", why: "どこで違いが出るかを見るため", how_to_use: "同じ場面どうしで見比べるために使う", is_default: true, derived_from_key: null },
-      { key: "what_happened", label: "何が起きた", type: "text", unit: null, options: [], role: "core", why: "その回のようすを短く残すため", how_to_use: "違いが出た回を読み返すときに使う", is_default: true, derived_from_key: null },
-      { key: "difference_hint", label: "気になる違い", type: "boolean", unit: null, options: [], role: "compare", why: "あとで見比べたい回を見つけるため", how_to_use: "気になる回に印を付けてあとで集める", is_default: false, derived_from_key: null },
+      { key: "trying", label: "試すこと", type: "select", unit: null, options: ["やり方A", "やり方B"], role: "compare", why: "今回何を試したかを分けるため", how_to_use: "試すことごとに見返す", is_default: false, derived_from_key: null },
+      { key: "scene", label: "場面", type: "select", unit: null, options: ["はじめ", "途中", "おわり"], role: "core", why: "どんな状況だったか残すため", how_to_use: "近い場面どうしで見返す", is_default: true, derived_from_key: null },
+      { key: "what_happened", label: "結果", type: "text", unit: null, options: [], role: "core", why: "どうだったかを短く残すため", how_to_use: "試すこととの違いを見返す", is_default: true, derived_from_key: null },
     ],
     fallback_message: RECORD_FIELD_FALLBACK,
   };
@@ -324,8 +346,8 @@ export async function generateSplitFieldSuggestions(input: Record<string, unknow
     recordFieldsModel,
     [
       "あなたは記録フォーム設計者です。",
-      "次の入力から、既存の観測項目を細かく見るための子項目候補を 2〜4 件提案してください。",
-      "子項目は、親項目を置き換えるのではなく、親項目の中の違いや内訳を見るためのものにしてください。",
+      "次の入力から、既存の項目をより細かく残すための子項目候補を 2〜4 件提案してください。",
+      "子項目は、親項目を置き換えるのではなく、親項目の中の違いや内訳を残しやすくするためのものにしてください。",
       "question_text と wish_text に書かれていない具体物を勝手に足してはいけません。",
       `今回細かく分ける親項目は ${parentFieldKey}:${parentFieldLabel} (${parentFieldType}) です。`,
       existingKeys.length > 0 ? `既存項目は ${existingKeys.join(", ")} です。重複する key は出さないでください。` : "",
@@ -358,7 +380,7 @@ export async function generateSplitFieldSuggestions(input: Record<string, unknow
       "- derived_from_key は必ず親項目の key にする",
       "- 既存 key と重複する key は出さない",
       "- label は12文字以内",
-      "- 観測値として直接記録できるものにする",
+      "- 1回ごとに直接記録できるものにする",
       "- select を使うときは options を2件以上入れる",
       "- JSON 以外の説明文は書かない",
       "- Markdown のコードフェンスは使わない",
@@ -374,7 +396,7 @@ export async function generateSplitFieldSuggestions(input: Record<string, unknow
           options: ["はじめ", "途中", "おわり"],
           role: "optional",
           why: `${parentFieldLabel}を細かく見るため`,
-          how_to_use: "内訳ごとに違いを見る",
+          how_to_use: "内訳ごとに見返す",
           is_default: false,
           derived_from_key: parentFieldKey,
         },

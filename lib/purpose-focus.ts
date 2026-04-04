@@ -5,9 +5,9 @@ export const PRIMARY_PURPOSE_FOCUS_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
-  { value: "compare", label: "くらべる", description: "ちがいを見る" },
-  { value: "relate", label: "つなげる", description: "いっしょに起きることを見る" },
-  { value: "predict", label: "たしかめる", description: "次を見立てて確かめる" },
+  { value: "relate", label: "見る", description: "まず何が起きているかをつかむ" },
+  { value: "compare", label: "試す", description: "やり方の違いを試し分ける" },
+  { value: "predict", label: "続ける", description: "ひとつのやり方や見方を続けて確かめる" },
 ];
 
 export function getPrimaryPurposeFocusOption(value: string) {

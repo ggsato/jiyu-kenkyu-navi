@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { generateHomeSummary } from "@/lib/ai";
 import { HOME_SUMMARY_FALLBACK } from "@/lib/constants";
 import { logEvent } from "@/lib/logging";
+import { buildRecordVisualization, type RecordVisualization } from "@/lib/record-visualization";
 import { formatDateInAppTimeZone, formatDateTimeInAppTimeZone, getTodayDateInAppTimeZone } from "@/lib/utils";
 
 type RecordWithAttachments = PrismaRecord & {
@@ -26,6 +27,7 @@ type HomePayload =
       active_wish_id: string | null;
       latest_reflection: Reflection | null;
       recent_records: RecordWithAttachments[];
+      record_visualization: RecordVisualization;
       pending_reflection_date: string;
       observation_summary: {
         current: string[];
@@ -58,6 +60,7 @@ type HomePayload =
       active_wish_id: string;
       latest_reflection: Reflection | null;
       recent_records: RecordWithAttachments[];
+      record_visualization: RecordVisualization;
       pending_reflection_date: string;
       observation_summary: {
         current: string[];
@@ -86,7 +89,7 @@ export async function getActiveQuestionWithRelations(userId: string) {
       wish: true,
       records: {
         orderBy: { recordedAt: "desc" },
-        take: 5,
+        take: 12,
         include: { attachments: true },
       },
       reflections: {
@@ -162,6 +165,11 @@ export async function buildHomePayload(userId: string): Promise<HomePayload> {
       active_wish_id: null,
       latest_reflection: null,
       recent_records: [],
+      record_visualization: {
+        kind: "empty",
+        title: "まだ見える形がありません",
+        description: "記録がたまると、ここに変化や試し分けの流れが出ます。",
+      },
       pending_reflection_date: getTodayDateInAppTimeZone(),
       observation_summary: {
         current: [],
@@ -240,6 +248,22 @@ export async function buildHomePayload(userId: string): Promise<HomePayload> {
       .map((field) => field.label)
       .slice(0, 3),
   };
+  const recordVisualization = buildRecordVisualization(
+    activeQuestion.records.map((record) => ({
+      recordedAt: record.recordedAt.toISOString(),
+      kvFields: (record.kvFields as globalThis.Record<string, unknown>) || {},
+    })),
+    currentFocuses.map((focus) => ({
+      key: focus.fieldDefinition.key,
+      label: focus.fieldDefinition.label,
+      type: focus.fieldDefinition.type,
+      unit: focus.fieldDefinition.unit,
+      role: focus.fieldDefinition.role,
+      why: focus.fieldDefinition.why,
+      isPrimaryMetric: focus.isPrimaryMetric,
+    })),
+    activeQuestion.purposeFocus,
+  );
 
   const aiSummary = await generateHomeSummary({
     wish_text: activeQuestion.wish.text,
@@ -276,6 +300,7 @@ export async function buildHomePayload(userId: string): Promise<HomePayload> {
       ...record,
       recordedAtLabel: formatDateTimeInAppTimeZone(record.recordedAt),
     })),
+    record_visualization: recordVisualization,
     pending_reflection_date: getTodayDateInAppTimeZone(),
     observation_summary: observationSummary,
     wishes,

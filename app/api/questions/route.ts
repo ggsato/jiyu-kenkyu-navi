@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
           howToUse: field.how_to_use || null,
           isDefault: field.is_default || false,
           isSelected: field.is_selected ?? true,
+          isPrimaryMetric: field.is_primary_metric ?? false,
           derivedFromKey: field.derived_from_key || null,
         }))
       : (await buildWishObservationFieldCandidates(input.wish_id, input.question_text, normalizedPurposeFocus, {
@@ -60,6 +61,48 @@ export async function POST(request: NextRequest) {
           not_yet: input.not_yet,
           desired_state: input.desired_state,
         })).fields;
+
+    if (normalizedPurposeFocus === "compare") {
+      const selectedCompareFields = fieldDefinitionInputs.filter(
+        (field) => field.isSelected !== false && field.role === "compare",
+      );
+
+      if (selectedCompareFields.length !== 1) {
+        return NextResponse.json(
+          { error: "『試す』の問いでは、『試し分けに使う』項目を1つだけ選んでください" },
+          { status: 400 },
+        );
+      }
+
+      const primaryCompareField = selectedCompareFields[0]!;
+
+      if (primaryCompareField.type !== "select" || (primaryCompareField.options || []).length < 2) {
+        return NextResponse.json(
+          { error: "『今回試すこと』は、選択肢を2つ以上持つ『選ぶ』項目にしてください" },
+          { status: 400 },
+        );
+      }
+
+      const selectedPrimaryMetricFields = fieldDefinitionInputs.filter(
+        (field) => field.isSelected !== false && field.isPrimaryMetric,
+      );
+
+      if (selectedPrimaryMetricFields.length !== 1) {
+        return NextResponse.json(
+          { error: "『試す』の問いでは、『今回見る項目』を1つだけ選んでください" },
+          { status: 400 },
+        );
+      }
+
+      const primaryMetricField = selectedPrimaryMetricFields[0]!;
+
+      if (primaryMetricField.type !== "number" && primaryMetricField.type !== "boolean") {
+        return NextResponse.json(
+          { error: "『今回見る項目』は、数で入れる項目か、はい/いいえの項目にしてください" },
+          { status: 400 },
+        );
+      }
+    }
 
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.question.updateMany({
@@ -103,7 +146,16 @@ export async function POST(request: NextRequest) {
 
       const fieldDefinitions = await upsertObservationFieldDefinitions(tx, wish.id, fieldDefinitionInputs);
       const selectedFieldKeys = fieldDefinitionInputs.filter((field) => field.isSelected !== false).map((field) => field.key);
-      const observationFocuses = await createQuestionObservationFocuses(tx, question.id, fieldDefinitions, selectedFieldKeys);
+      const observationFocuses = await createQuestionObservationFocuses(
+        tx,
+        question.id,
+        fieldDefinitions.map((field) => ({
+          id: field.id,
+          key: field.key,
+          isPrimaryMetric: fieldDefinitionInputs.find((item) => item.key === field.key)?.isPrimaryMetric || false,
+        })),
+        selectedFieldKeys,
+      );
       await pruneNeverSelectedObservationFields(tx, wish.id, selectedFieldKeys);
 
       return { wish, question, fieldDefinitions, observationFocuses };

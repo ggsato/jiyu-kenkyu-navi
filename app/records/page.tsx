@@ -34,6 +34,9 @@ export default async function RecordsPage() {
   const selectedFieldIds = new Set(
     questionFocuses.filter((focus) => focus.isSelected).map((focus) => focus.fieldDefinitionId),
   );
+  const primaryMetricFieldIds = new Set(
+    questionFocuses.filter((focus) => focus.isSelected && focus.isPrimaryMetric).map((focus) => focus.fieldDefinitionId),
+  );
   const allFieldDefinitions = activeQuestion
     ? await prisma.observationFieldDefinition.findMany({
         where: { wishId: activeQuestion.wishId },
@@ -52,7 +55,7 @@ export default async function RecordsPage() {
     <PageShell>
       <Card>
         <SectionTitle>記録</SectionTitle>
-        <p className="mt-2 text-sm text-slate-600">今何をしているかを残し、同じ願いの観測を積み上げながら次に何を見るとよいかを見つけます。</p>
+        <p className="mt-2 text-sm text-slate-600">今回どうしてみたかと、その結果を残しながら、この願いで次に何を試すとよいかを見つけます。</p>
         <p className="mt-3 text-base font-medium text-slate-900">{activeQuestion?.text || "まずは問いを作ろう"}</p>
       </Card>
       <RecordsClient
@@ -71,6 +74,7 @@ export default async function RecordsPage() {
           why: field.why,
           howToUse: field.howToUse,
           isDefault: field.isDefault,
+          isPrimaryMetric: primaryMetricFieldIds.has(field.id),
           parentLabel: field.derivedFromField?.label || null,
         }))}
         allFieldDefinitions={allFieldDefinitions.map((field) => ({
@@ -87,6 +91,7 @@ export default async function RecordsPage() {
           derivedFromKey: field.derivedFromField?.key || null,
           derivedFromLabel: field.derivedFromField?.label || null,
           isSelected: selectedFieldIds.has(field.id),
+          isPrimaryMetric: primaryMetricFieldIds.has(field.id),
         }))}
       />
     </PageShell>

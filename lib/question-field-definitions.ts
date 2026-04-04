@@ -13,6 +13,7 @@ export type FieldDefinitionInput = {
   howToUse?: string | null;
   isDefault?: boolean;
   isSelected?: boolean;
+  isPrimaryMetric?: boolean;
   derivedFromFieldId?: string | null;
   derivedFromKey?: string | null;
 };
@@ -23,6 +24,7 @@ type FieldContext = {
   current_state?: string;
   not_yet?: string;
   desired_state?: string;
+  record_insight_summary?: string;
 };
 
 export type ExistingFieldLike = FieldDefinitionInput & {
@@ -365,6 +367,7 @@ export async function buildObservationFieldInputs(
     current_state: context.current_state || "",
     not_yet: context.not_yet || "",
     desired_state: context.desired_state || "",
+    record_insight_summary: context.record_insight_summary || "",
     existing_kv_keys: existingFields.map((field) => field.key),
     existing_fields: existingFields.map((field) => ({
       key: field.key,
@@ -536,7 +539,7 @@ export async function pruneNeverSelectedObservationFields(
 export async function createQuestionObservationFocuses(
   tx: Prisma.TransactionClient,
   questionId: string,
-  fields: Array<{ id: string; key?: string }>,
+  fields: Array<{ id: string; key?: string; isPrimaryMetric?: boolean }>,
   selectedKeys?: string[],
 ) {
   return Promise.all(
@@ -546,6 +549,7 @@ export async function createQuestionObservationFocuses(
           questionId,
           fieldDefinitionId: field.id,
           isSelected: selectedKeys ? selectedKeys.includes(field.key || "") : true,
+          isPrimaryMetric: Boolean(field.isPrimaryMetric),
           sortOrder: index,
         },
       }),
@@ -556,7 +560,7 @@ export async function createQuestionObservationFocuses(
 export async function syncQuestionObservationFocuses(
   tx: Prisma.TransactionClient,
   questionId: string,
-  fields: Array<{ id: string; key: string }>,
+  fields: Array<{ id: string; key: string; isPrimaryMetric?: boolean }>,
   selectedKeys: string[],
 ) {
   const selectedKeySet = new Set(selectedKeys);
@@ -572,12 +576,14 @@ export async function syncQuestionObservationFocuses(
         },
         update: {
           isSelected: selectedKeySet.has(field.key),
+          isPrimaryMetric: Boolean(field.isPrimaryMetric),
           sortOrder: index,
         },
         create: {
           questionId,
           fieldDefinitionId: field.id,
           isSelected: selectedKeySet.has(field.key),
+          isPrimaryMetric: Boolean(field.isPrimaryMetric),
           sortOrder: index,
         },
       }),
