@@ -48,6 +48,14 @@ function sortFieldDefinitions(fields: FieldDefinition[]) {
   return sortVisualizationFields(fields);
 }
 
+function summarizeBodyText(text: string, maxLength: number) {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
 export function RecordsClient({
   activeQuestionId,
   activeQuestionText,
@@ -111,14 +119,41 @@ export function RecordsClient({
 
         return `${field.label}: ${String(value)}`;
       })
-      .filter(Boolean);
+      .filter((part): part is string => Boolean(part));
 
     if (parts.length > 0) {
-      return parts.join(" / ");
+      const summaryParts: string[] = [];
+
+      for (const part of parts) {
+        const nextText = summaryParts.length === 0 ? part : `${summaryParts.join(" / ")} / ${part}`;
+
+        if (nextText.length > INPUT_LIMITS.record_body) {
+          break;
+        }
+
+        summaryParts.push(part);
+      }
+
+      if (summaryParts.length === 0) {
+        return summarizeBodyText(parts[0]!, INPUT_LIMITS.record_body);
+      }
+
+      if (summaryParts.length < parts.length) {
+        const suffix = ` / ほか${parts.length - summaryParts.length}項目`;
+        const withSuffix = `${summaryParts.join(" / ")}${suffix}`;
+
+        if (withSuffix.length <= INPUT_LIMITS.record_body) {
+          return withSuffix;
+        }
+
+        return summarizeBodyText(summaryParts.join(" / "), INPUT_LIMITS.record_body);
+      }
+
+      return summaryParts.join(" / ");
     }
 
     if (memo.trim()) {
-      return memo.trim();
+      return summarizeBodyText(memo.trim(), INPUT_LIMITS.record_body);
     }
 
     return "記録を追加";
