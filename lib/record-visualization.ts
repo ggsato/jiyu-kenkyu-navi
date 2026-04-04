@@ -5,6 +5,7 @@ export type VisualizationFieldDefinition = {
   unit?: string | null;
   role?: "core" | "compare" | "optional";
   why?: string | null;
+  isPrimaryMetric?: boolean;
 };
 
 export type VisualizationRecord = {
@@ -265,6 +266,14 @@ function fieldScore(field: VisualizationFieldDefinition) {
 }
 
 function findMetricField(records: VisualizationRecord[], fields: VisualizationFieldDefinition[]) {
+  const explicit = fields.find(
+    (field) => field.isPrimaryMetric && isMetricCandidate(field) && records.some((record) => toNumericValue(record.kvFields[field.key]) !== null),
+  );
+
+  if (explicit) {
+    return explicit;
+  }
+
   return [...fields]
     .filter((field) => isMetricCandidate(field) && records.some((record) => toNumericValue(record.kvFields[field.key]) !== null))
     .sort((a, b) => fieldScore(b) - fieldScore(a))[0] || null;

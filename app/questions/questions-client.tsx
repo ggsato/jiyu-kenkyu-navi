@@ -23,6 +23,7 @@ type FieldCandidate = {
   why: string | null;
   how_to_use?: string | null;
   is_default: boolean;
+  is_primary_metric?: boolean;
   derived_from_key?: string | null;
   is_custom?: boolean;
 };
@@ -117,6 +118,10 @@ function fieldTypeLabel(type: FieldCandidate["type"]) {
 
 function fieldShortHint(field: FieldCandidate) {
   return field.why || "今回どうしてみたかや、どうだったかを残すための項目です。";
+}
+
+function isMetricField(field: FieldCandidate) {
+  return field.type === "number" || field.type === "boolean";
 }
 
 function parseOptionsText(value: string) {
@@ -609,16 +614,24 @@ export function QuestionsClient({
       const compareFieldKeys = purposeFocus === "compare"
         ? nextFieldCandidates.filter((field) => field.role === "compare").map((field) => field.key)
         : [];
-      setFieldCandidates(nextFieldCandidates);
+      const primaryMetricKey = purposeFocus === "compare"
+        ? nextFieldCandidates.find((field) => field.is_primary_metric)?.key || nextFieldCandidates.find((field) => isMetricField(field))?.key || ""
+        : "";
+      const normalizedFieldCandidates = nextFieldCandidates.map((field) => ({
+        ...field,
+        is_primary_metric: primaryMetricKey ? field.key === primaryMetricKey : Boolean(field.is_primary_metric),
+      }));
+      setFieldCandidates(normalizedFieldCandidates);
       setSplitSuggestedKeys(nextSplitSuggestedKeys);
       setSelectedFieldKeys(
         Array.from(
           new Set([
             ...getDefaultSelectedFieldKeys(
-              nextFieldCandidates,
+              normalizedFieldCandidates,
               mergedPreferredKeys,
             ),
             ...compareFieldKeys,
+            ...(primaryMetricKey ? [primaryMetricKey] : []),
           ]),
         ),
       );
@@ -684,6 +697,7 @@ export function QuestionsClient({
       why: customFieldForm.why.trim() || null,
       how_to_use: customFieldForm.howToUse.trim() || null,
       is_default: false,
+      is_primary_metric: false,
       derived_from_key: null,
       is_custom: true,
     };
@@ -837,6 +851,7 @@ export function QuestionsClient({
           field_definitions: fieldCandidates.map((field) => ({
             ...field,
             is_selected: selectedFieldKeys.includes(field.key),
+            is_primary_metric: Boolean(field.is_primary_metric),
           })),
         }),
       });
@@ -865,6 +880,8 @@ export function QuestionsClient({
   const inactiveFields = fieldCandidates.filter((field) => !selectedFieldKeys.includes(field.key));
   const selectedCompareFields = selectedFields.filter((field) => field.role === "compare");
   const primaryCompareField = selectedCompareFields[0] || null;
+  const selectedMetricFields = selectedFields.filter((field) => field.is_primary_metric);
+  const primaryMetricField = selectedMetricFields[0] || null;
   const compareSetupError = form.purpose_focus !== "compare"
     ? ""
     : selectedCompareFields.length === 0
@@ -875,7 +892,11 @@ export function QuestionsClient({
           ? "『今回試すこと』は、選択肢から選べる項目にしてください。"
           : primaryCompareField.options.length < 2
             ? "『今回試すこと』には、選択肢を2つ以上入れてください。"
-            : "";
+            : selectedMetricFields.length !== 1
+              ? "『試す』の問いでは、『今回見る項目』を1つ決めてください。"
+              : !primaryMetricField || !isMetricField(primaryMetricField)
+                ? "『今回見る項目』は、数で入れる項目か、はい/いいえの項目にしてください。"
+                : "";
   const activeStep = isSaving || selectedFieldKeys.length > 0
     ? 5
     : isLoadingFields || form.question_text
@@ -929,6 +950,7 @@ export function QuestionsClient({
         <div className="mt-3 flex flex-wrap gap-2">
           <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white">{meta.title}</span>
           <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">{fieldTypeLabel(field.type)}</span>
+          {field.is_primary_metric ? <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-900">今回見る項目</span> : null}
           {field.is_default ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">AI初期提案</span> : null}
           {field.is_custom ? <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">自分で追加</span> : null}
           {splitSuggestedKeys.includes(field.key) ? <span className="rounded-full bg-white px-3 py-1 text-xs text-amber-800">細かく分ける候補</span> : null}
@@ -997,6 +1019,23 @@ export function QuestionsClient({
                 </select>
               </div>
             </div>
+            {isMetricField(field) ? (
+              <label className="flex items-center gap-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={Boolean(field.is_primary_metric)}
+                  onChange={(event) =>
+                    setFieldCandidates((current) =>
+                      current.map((candidate) => ({
+                        ...candidate,
+                        is_primary_metric: candidate.key === field.key ? event.target.checked : false,
+                      })),
+                    )
+                  }
+                />
+                今回見る項目にする
+              </label>
+            ) : null}
             {field.type === "select" ? (
               <div>
                 <label className="field-label">選択肢</label>
@@ -1346,14 +1385,23 @@ export function QuestionsClient({
           </p>
         ) : null}
         {form.purpose_focus === "compare" && primaryCompareField ? (
-          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
-            <p className="text-sm font-medium text-slate-900">今回試すこと</p>
-            <p className="mt-1 text-sm text-slate-700">{primaryCompareField.label}</p>
-            <p className="mt-2 text-xs text-slate-600">
-              {primaryCompareField.options.length > 0
-                ? `選択肢: ${primaryCompareField.options.join(" / ")}`
-                : "選択肢を入れると、何を試し分けるかがはっきりします。"}
-            </p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+              <p className="text-sm font-medium text-slate-900">今回試すこと</p>
+              <p className="mt-1 text-sm text-slate-700">{primaryCompareField.label}</p>
+              <p className="mt-2 text-xs text-slate-600">
+                {primaryCompareField.options.length > 0
+                  ? `選択肢: ${primaryCompareField.options.join(" / ")}`
+                  : "選択肢を入れると、何を試し分けるかがはっきりします。"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-sm font-medium text-slate-900">今回見る項目</p>
+              <p className="mt-1 text-sm text-slate-700">{primaryMetricField?.label || "まだ決まっていません"}</p>
+              <p className="mt-2 text-xs text-slate-600">
+                {primaryMetricField ? "この項目で、試し方ごとの違いを見ます。" : "数で入れる項目か、はい/いいえの項目を1つ選びます。"}
+              </p>
+            </div>
           </div>
         ) : null}
         {form.purpose_focus === "compare" && compareSetupError ? (

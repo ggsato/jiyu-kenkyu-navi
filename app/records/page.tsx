@@ -34,6 +34,9 @@ export default async function RecordsPage() {
   const selectedFieldIds = new Set(
     questionFocuses.filter((focus) => focus.isSelected).map((focus) => focus.fieldDefinitionId),
   );
+  const primaryMetricFieldIds = new Set(
+    questionFocuses.filter((focus) => focus.isSelected && focus.isPrimaryMetric).map((focus) => focus.fieldDefinitionId),
+  );
   const allFieldDefinitions = activeQuestion
     ? await prisma.observationFieldDefinition.findMany({
         where: { wishId: activeQuestion.wishId },
@@ -71,6 +74,7 @@ export default async function RecordsPage() {
           why: field.why,
           howToUse: field.howToUse,
           isDefault: field.isDefault,
+          isPrimaryMetric: primaryMetricFieldIds.has(field.id),
           parentLabel: field.derivedFromField?.label || null,
         }))}
         allFieldDefinitions={allFieldDefinitions.map((field) => ({
@@ -87,6 +91,7 @@ export default async function RecordsPage() {
           derivedFromKey: field.derivedFromField?.key || null,
           derivedFromLabel: field.derivedFromField?.label || null,
           isSelected: selectedFieldIds.has(field.id),
+          isPrimaryMetric: primaryMetricFieldIds.has(field.id),
         }))}
       />
     </PageShell>

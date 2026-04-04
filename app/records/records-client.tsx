@@ -20,6 +20,7 @@ type FieldDefinition = {
   why: string | null;
   howToUse: string | null;
   isDefault: boolean;
+  isPrimaryMetric?: boolean;
   parentLabel: string | null;
 };
 

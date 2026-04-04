@@ -56,6 +56,7 @@ export default async function QuestionsPage({ searchParams }: QuestionsPageProps
           unit: focus.fieldDefinition.unit,
           role: focus.fieldDefinition.role,
           why: focus.fieldDefinition.why,
+          isPrimaryMetric: focus.isPrimaryMetric,
         })),
         activeQuestion.purposeFocus,
       )

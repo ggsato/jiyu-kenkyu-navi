@@ -27,6 +27,7 @@ export const selectedFieldDefinitionSchema = z.object({
   how_to_use: z.string().max(80).nullable().optional(),
   is_default: z.boolean().optional().default(false),
   is_selected: z.boolean().optional().default(true),
+  is_primary_metric: z.boolean().optional().default(false),
   derived_from_key: z.string().optional().nullable(),
 });
 

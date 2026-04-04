@@ -17,6 +17,7 @@ export type EditableObservationField = {
   derivedFromKey: string | null;
   derivedFromLabel: string | null;
   isSelected: boolean;
+  isPrimaryMetric?: boolean;
 };
 
 type ObservationFieldEditorProps = {
@@ -122,6 +123,7 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
         derivedFromKey: parent?.key || null,
         derivedFromLabel: parent?.label || null,
         isSelected: true,
+        isPrimaryMetric: false,
       },
     ]);
     setCustomField({
@@ -148,6 +150,13 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
       return;
     }
 
+    const selectedPrimaryMetricFields = draftFields.filter((field) => field.isSelected && field.isPrimaryMetric);
+
+    if (selectedPrimaryMetricFields.length > 1) {
+      setError("『今回見る項目』は1つだけ選んでください");
+      return;
+    }
+
     startTransition(async () => {
       const response = await fetch("/api/questions/active/field-definitions", {
         method: "PATCH",
@@ -164,6 +173,7 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
             how_to_use: field.howToUse,
             is_default: field.isDefault,
             is_selected: field.isSelected,
+            is_primary_metric: field.isPrimaryMetric || false,
             derived_from_key: field.derivedFromKey,
           })),
         }),
@@ -213,6 +223,7 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
               </label>
               <div className="flex flex-wrap gap-2 text-xs">
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">{field.type}</span>
+                {field.isPrimaryMetric ? <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-900">今回見る項目</span> : null}
                 {field.isDefault ? <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">AI初期提案</span> : null}
                 {field.derivedFromLabel ? <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-900">細分化元: {field.derivedFromLabel}</span> : null}
               </div>
@@ -252,6 +263,23 @@ export function ObservationFieldEditor({ fields, onSaved }: ObservationFieldEdit
                   <label className="field-label">何を見るためか</label>
                   <input value={field.why || ""} onChange={(event) => updateField(field.key, { why: event.target.value || null })} />
                 </div>
+                {field.type === "number" || field.type === "boolean" ? (
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(field.isPrimaryMetric)}
+                      onChange={(event) =>
+                        setDraftFields((current) =>
+                          current.map((item) => ({
+                            ...item,
+                            isPrimaryMetric: item.key === field.key ? event.target.checked : false,
+                          })),
+                        )
+                      }
+                    />
+                    今回見る項目にする
+                  </label>
+                ) : null}
                 <div className="md:col-span-2">
                   <label className="field-label">あとでどう使うか</label>
                   <input value={field.howToUse || ""} onChange={(event) => updateField(field.key, { howToUse: event.target.value || null })} />

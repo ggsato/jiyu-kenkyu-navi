@@ -260,6 +260,7 @@ export async function buildHomePayload(userId: string): Promise<HomePayload> {
       unit: focus.fieldDefinition.unit,
       role: focus.fieldDefinition.role,
       why: focus.fieldDefinition.why,
+      isPrimaryMetric: focus.isPrimaryMetric,
     })),
     activeQuestion.purposeFocus,
   );
