@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!question) {
-      return NextResponse.json({ error: "その問いの振り返りは保存できません" }, { status: 404 });
+      return NextResponse.json({ error: "その問いの流れメモは保存できません" }, { status: 404 });
     }
 
     const reflection = await prisma.reflection.upsert({
@@ -56,6 +56,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ reflection }, { status: 201 });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: getErrorMessage(error, "振り返りを保存できませんでした") }, { status: 400 });
+    return NextResponse.json({ error: getErrorMessage(error, "流れメモを保存できませんでした") }, { status: 400 });
   }
 }

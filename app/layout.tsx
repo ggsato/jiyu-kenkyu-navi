@@ -34,7 +34,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 <NavLink href="/">ホーム</NavLink>
                 <NavLink href="/questions">問い作成</NavLink>
                 <NavLink href="/records">記録</NavLink>
-                <NavLink href="/reflection">振り返り</NavLink>
+                <NavLink href="/flow">流れを見る</NavLink>
                 <NavLink href="/family">家族設定</NavLink>
               </nav>
               <div className="md:w-[220px]">
