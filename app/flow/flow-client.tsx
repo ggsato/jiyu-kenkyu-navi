@@ -113,19 +113,19 @@ export function FlowClient({
                 title: "いまの土台",
                 before: previousWishState.current_state,
                 after: learned,
-                note: "次の問い作成では、この欄が「今できていること」の初期入力候補になります。",
+                note: "これは願いの土台そのものではなく、次の問いを考えるときの参照メモとして使います。",
               },
               {
                 title: "まだ埋まっていないこと",
                 before: previousWishState.not_yet,
                 after: unknown,
-                note: "次の問い作成では、この欄が「まだできていないこと」の初期入力候補になります。",
+                note: "これは願いの土台そのものではなく、次の問いを考えるときの参照メモとして使います。",
               },
               {
                 title: "次に試したいこと",
                 before: previousWishState.desired_state,
                 after: nextStepText,
-                note: "次の問い作成では、この欄が「今いちばん気になること」の初期入力候補になります。",
+                note: "次の問い作成では、主に「今いちばん気になること」を考えるときの補助メモとして使います。",
               },
             ].map((item) => (
               <div key={item.title} className="rounded-2xl bg-white p-4 ring-1 ring-slate-200">

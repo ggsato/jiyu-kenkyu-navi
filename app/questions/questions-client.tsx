@@ -1189,7 +1189,7 @@ export function QuestionsClient({
       {mode === "continue" && continueSummary ? (
         <Card className="space-y-4">
           <SectionTitle>続きに入るときの材料</SectionTitle>
-          <p className="text-sm text-slate-700">願いの土台は残したまま、直近の「流れを見る」で整理した内容を次の問いづくりの初期入力に使います。</p>
+          <p className="text-sm text-slate-700">願いの土台はそのまま維持します。直近の「流れを見る」は、次の問いを考えるときの参照メモとして見返します。</p>
           <div className="grid gap-3 md:grid-cols-3">
             {[
               {
@@ -1218,7 +1218,7 @@ export function QuestionsClient({
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <p className="text-sm font-medium text-slate-900">直近の流れメモ</p>
-            <p className="mt-1 text-sm text-slate-700">ここで整理した内容は参考表示だけではなく、上の入力欄の初期値にも反映されています。</p>
+            <p className="mt-1 text-sm text-slate-700">ここで整理した内容は、願いの土台を自動では書き換えません。「今いちばん気になること」を考えるときの参照メモとして使います。</p>
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               {[
                 {
